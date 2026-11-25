@@ -11,3 +11,5 @@ Royal UI (1.2.0): original SVG artwork authored for this project, inspired by th
 1.2.1: twelve original 2048×1024 marble material maps, 1024×1024 stone albedo and relief normal map, original alpha cloud texture, animated waterfall shader and stone arch landmarks. Generated deterministically by tools/generate_materials.py; no paid assets or padding.
 
 1.3.0: approved original emerald/gold icon, optimised 96px WebP for launcher; three real courses with locked progression; unified collision/visual deck, guard rails, off-centre moving obstacles, and real physics tests for all pickups and finish gates. Extra original 2K gold, moss and crystal texture maps and upgraded stone/normal maps, applied to visible geometry. Store artwork is separately retained at 512px.
+
+1.4.0: twelve independent route layouts, original low-contrast 2K architectural surfaces per course, stage-specific scenery, goal rings, optional reward terraces, stage records and paginated course selection. Royal controls and icon retained. No package padding.

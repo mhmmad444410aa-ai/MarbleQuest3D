@@ -167,19 +167,39 @@ func run() -> void:
         return
     # Real physics traversal from spawn through all mandatory pickups and the final gate,
     # on every course; do not manually invoke finish_course for this regression.
-    for stage in range(3):
+    for stage in range(12):
         scene.start_stage(stage)
         await process_frame
-        for tick in range(1050):
+        if scene.route_points.size()<6 or scene.stage_index!=stage:
+            push_error("Stage data or progression failed "+str(stage))
+            quit(1)
+            return
+        var waypoint = 1
+        for tick in range(3600):
             await physics_frame
             if scene.finished: break
-            scene.move = Vector2(clampf(-scene.ball.position.x*0.75-scene.ball.linear_velocity.x*0.28,-0.5,0.5),-0.85)
+            var target: Vector3 = scene.route_points[waypoint]
+            var error = Vector2(target.x-scene.ball.position.x,target.z-scene.ball.position.z)
+            if error.length()<0.65 and waypoint<scene.route_points.size()-1:
+                waypoint+=1
+                target=scene.route_points[waypoint]
+                error=Vector2(target.x-scene.ball.position.x,target.z-scene.ball.position.z)
+            var velocity = Vector2(scene.ball.linear_velocity.x,scene.ball.linear_velocity.z)
+            scene.move = (error*0.8-velocity*0.32).limit_length(0.9)
         scene.move = Vector2.ZERO
         if not scene.won or scene.count != 3 or scene.falls != 0 or scene.lives != 3:
-            push_error("Full route failed stage %d at %s pickups %d falls %d" % [stage+1,str(scene.ball.position),scene.count,scene.falls])
+            push_error("Full route failed stage %d at %s waypoint %d pickups %d falls %d" % [stage+1,str(scene.ball.position),waypoint,scene.count,scene.falls])
+            quit(1)
+            return
+        if scene.art_texture("deck_%02d" % stage)==null:
+            push_error("Missing distinct deck artwork "+str(stage))
             quit(1)
             return
         print("FULL_COURSE_OK ",stage+1)
+    if scene.stage_records.size()!=12:
+        push_error("Stage records missing")
+        quit(1)
+        return
     if not ResourceLoader.exists("res://assets/royal_ui/launcher.webp"):
         push_error("Approved launcher icon missing")
         quit(1)

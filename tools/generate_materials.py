@@ -102,3 +102,27 @@ for name,base,amp in [("gold_metal",(168,121,49),32),("moss",(56,102,44),38),("c
             data.extend(bytes(clamp(c+n*amp) for c in base))
     png(name,N,N,3,data)
     print("Material",name,flush=True)
+
+# Original 2K low-contrast architectural surfaces, individually used on each course.
+N=2048
+finishes=[(210,218,224),(187,211,194),(230,211,172),(200,191,225),(227,197,167),(222,236,241),(198,215,189),(151,160,176),(182,216,233),(221,198,183),(239,229,210),(202,190,228)]
+for i,base in enumerate(finishes):
+    data=bytearray()
+    cols=[math.sin(TAU*x/N*(3+i%4)) for x in range(N)]
+    fine=[math.sin(TAU*x/N*(89+i*3)) for x in range(N)]
+    for y in range(N):
+        v=y/N
+        wave=math.sin(TAU*v*(6+i%5))
+        rows=int(v*(2+i%3))
+        fine_y=math.sin(TAU*v*(67+i))
+        for x in range(N):
+            u=x/N
+            a=(u*(2+i%3)+rows*.5)%1
+            b=(v*(2+i%3))%1
+            edge=min(a,1-a,b,1-b)
+            seam=12*max(0,1-edge*140)
+            grain=cols[x]*wave*4+fine[x]*fine_y*2
+            veins=math.sin(TAU*(u*2+v*3)+cols[x]*1.8)*3
+            data.extend(bytes(clamp(c+grain+veins-seam) for c in base))
+    png("deck_%02d"%i,N,N,3,data)
+    print("Architectural surface",i,flush=True)

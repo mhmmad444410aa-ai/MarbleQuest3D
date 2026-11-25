@@ -54,9 +54,38 @@ var stage_index = 0
 var unlocked_stage = 0
 var next_stage_button: Button
 var stage_hazards: Array[AnimatableBody3D] = []
-const STAGE_NAMES = {"en":["Sky Crossing","Emerald Passage","Golden Ruins"],"ar":["عبور السماء","ممر الزمرد","الأطلال الذهبية"],"pt":["Travessia Celeste","Passagem Esmeralda","Ruínas Douradas"]}
-const STAGE_END = [-25.0,-33.0,-41.0]
-const STAGE_ORBS = [[-4.8,-9.0,-20.0],[-5.0,-17.0,-29.0],[-5.0,-21.0,-37.0]]
+const STAGE_NAMES = {
+ "en":["Sky Crossing","Emerald Passage","Golden Ruins","Crystal Canyon","Amber Bridges","Frost Terrace","Jade Gardens","Obsidian Circuit","Sapphire Falls","Copper Maze","Ivory Citadel","Twilight Summit"],
+ "ar":["عبور السماء","ممر الزمرد","الأطلال الذهبية","وادي البلور","جسور الكهرمان","مدرج الصقيع","حدائق اليشم","حلبة السبج","شلالات الياقوت","متاهة النحاس","قلعة العاج","قمة الشفق"],
+ "pt":["Travessia Celeste","Passagem Esmeralda","Ruínas Douradas","Cânion de Cristal","Pontes de Âmbar","Terraço Gelado","Jardins de Jade","Circuito de Obsidiana","Cascatas de Safira","Labirinto de Cobre","Cidadela de Marfim","Cume do Crepúsculo"]
+}
+const ROUTES = [
+ [[0,2],[0,-5],[0,-9],[0,-13],[0,-17],[0,-21],[0,-25]],
+ [[0,2],[0,-5],[4,-11],[4,-18],[-1,-24],[-1,-32]],
+ [[0,2],[-5,-5],[-5,-13],[2,-13],[2,-22],[7,-29],[7,-37]],
+ [[0,2],[0,-6],[6,-12],[0,-18],[-6,-24],[0,-30],[0,-39]],
+ [[0,2],[-4,-6],[-4,-15],[5,-15],[5,-24],[-2,-31],[-2,-40]],
+ [[0,2],[5,-5],[9,-12],[5,-20],[0,-26],[-5,-34],[-5,-43]],
+ [[0,2],[0,-7],[-7,-7],[-7,-17],[0,-23],[7,-23],[7,-34],[0,-41]],
+ [[0,2],[6,-4],[6,-13],[-3,-13],[-3,-22],[6,-28],[6,-38],[0,-46]],
+ [[0,2],[-5,-6],[0,-14],[7,-19],[7,-29],[0,-36],[-7,-42],[-7,-50]],
+ [[0,2],[0,-8],[8,-8],[8,-18],[-4,-18],[-4,-28],[5,-34],[5,-45],[0,-51]],
+ [[0,2],[-6,-5],[-6,-16],[0,-23],[7,-23],[7,-34],[0,-42],[-6,-48],[0,-55]],
+ [[0,2],[7,-6],[0,-14],[-8,-22],[-8,-33],[0,-39],[8,-39],[8,-50],[0,-57],[0,-65]]
+]
+const STAGE_END = [-25.0,-32.0,-37.0,-39.0,-40.0,-43.0,-41.0,-46.0,-50.0,-51.0,-55.0,-65.0]
+const DECK_COLORS = ["e0e6ea","c4e2d0","ebd4ae","c4c2e2","e2c5a7","dceaf1","cadbc3","a9b6cc","b9d8eb","dcc0af","f0e7d6","c5b6e1"]
+const SKY_COLORS = ["7fb9d9","76b8a6","d6ab75","9387c5","d6a575","a5c6e6","8dbba1","66758e","619ec7","c18d80","aebec9","7776a9"]
+var route_points: Array[Vector3] = []
+var stage_records: Dictionary = {}
+var stage_length = 0.0
+var secret_claimed = false
+var secret_platform: AnimatableBody3D
+var secret_origin = Vector3.ZERO
+var level_page = 0
+var level_buttons: Array[Button] = []
+var sky_surface: ProceduralSkyMaterial
+
 var coins = 0
 var owned: Array[int] = [0]
 var equipped = 0
@@ -163,6 +192,7 @@ func make_environment() -> void:
     var env = Environment.new()
     var sky = Sky.new()
     var sky_mat = ProceduralSkyMaterial.new()
+    sky_surface = sky_mat
     sky_mat.sky_top_color = Color("4387bc")
     sky_mat.sky_horizon_color = Color("d9edff")
     sky_mat.ground_bottom_color = Color("557c89")
@@ -236,7 +266,7 @@ func stone_piece(parent: Node3D, pos: Vector3, size: Vector3, angle: float = 0.0
     var block = BoxMesh.new()
     block.size = size
     part.mesh = block
-    part.material_override = palette_material("track",Color("8a856e"),0.88,0.0)
+    part.material_override = deck_material()
     parent.add_child(part)
     part.position = pos
     part.rotation.z = angle
@@ -374,6 +404,20 @@ func collider(parent: CollisionObject3D, size: Vector3, pos: Vector3) -> void:
     parent.add_child(col)
     col.position = pos
 
+func deck_material() -> StandardMaterial3D:
+    var key = "deck_"+str(stage_index)
+    if not materials.has(key):
+        var mat = StandardMaterial3D.new()
+        mat.albedo_color = Color(DECK_COLORS[stage_index])
+        mat.albedo_texture = art_texture("deck_%02d" % stage_index)
+        mat.roughness = 0.68
+        mat.metallic = 0.05
+        mat.uv1_triplanar = true
+        mat.uv1_world_triplanar = true
+        mat.uv1_scale = Vector3.ONE*0.21
+        materials[key] = mat
+    return materials[key]
+
 func platform(pos: Vector3, size: Vector3, moving: bool = false) -> Node3D:
     var body: PhysicsBody3D
     if moving:
@@ -427,8 +471,9 @@ func orb(pos: Vector3) -> void:
     a.body_entered.connect(func(body):
         if body == ball and not a.is_queued_for_deletion():
             count += 1
+            play_ui_sound()
             if count == 2:
-                spawn = Vector3(0,1.3,a.position.z)
+                spawn = a.position + Vector3(0,0.65,0)
                 checkpoint_active = true
             a.queue_free())
     orbs.append(a)
@@ -452,6 +497,8 @@ func reset_course() -> void:
     move = Vector2.ZERO
     braking = false
     spawn = Vector3(0, 1.3, 2)
+    secret_claimed = false
+    secret_platform = null
     orbs.clear()
     stage_hazards.clear()
     result.visible = false
@@ -461,45 +508,30 @@ func reset_course() -> void:
     pad.visible = true
     brake.visible = true
     refresh_lives()
-    platform(Vector3(0,0,0),Vector3(6.0,0.64,6.5))
-    platform(Vector3(0,0,-5),Vector3(4.1,0.64,4.7))
-    platform(Vector3(0,0,-9),Vector3(7.0,0.64,4.7))
-    # The optional branch remains visible, but no mandatory orb requires a risky lateral detour.
-    platform(Vector3(-3.7,0,-9),Vector3(3.0,0.64,3.6))
-    bridge = platform(Vector3(0,0,-13),Vector3(4.8,0.64,4.8)) as PhysicsBody3D
-    # Rail collision matches its visible geometry. No moving collision seam.
-    for side in [-1.0,1.0]:
-        var rail_pos = Vector3(side*2.26,0.28,0)
-        var rail_size = Vector3(0.28,0.56,4.8)
-        stone_piece(bridge,rail_pos,rail_size)
-        collider(bridge,rail_size,rail_pos)
-    platform(Vector3(0,0,-17),Vector3(6.4,0.64,4.7))
-    platform(Vector3(0,0,-21),Vector3(5.4,0.64,4.7))
-    platform(Vector3(0,0,-25),Vector3(6.4,0.64,4.7))
-    var end_z: float = STAGE_END[stage_index]
-    if stage_index >= 1:
-        platform(Vector3(-0.7,0,-29),Vector3(4.8,0.64,4.7))
-        platform(Vector3(0.5,0,-33),Vector3(6.2,0.64,4.7))
-    if stage_index >= 2:
-        platform(Vector3(0.9,0,-37),Vector3(4.6,0.64,4.7))
-        platform(Vector3(-0.4,0,-41),Vector3(6.4,0.64,4.7))
+    build_route()
     island_landscape()
-    decoration("marker",Vector3(2.35,1.25,-17),Vector3(0.7,2.2,0.7))
-    decoration("marker",Vector3(2.2,1.5,end_z),Vector3(0.9,2.8,0.9))
-    for z in STAGE_ORBS[stage_index]:
-        orb(Vector3(0,0.7,float(z)))
-    var cp = area_at(Vector3(0,0.8,-17),Vector3(3,1.6,2))
-    cp.body_entered.connect(func(body):
-        if body == ball and count >= 2 and not checkpoint_active:
-            spawn = Vector3(0,1.2,-17)
-            checkpoint_active = true)
-    blocker = make_hazard(Vector3(1.8,0.42,-22))
-    if stage_index >= 1: make_hazard(Vector3(-1.65,0.42,-30.5))
-    if stage_index >= 2: make_hazard(Vector3(1.75,0.42,-38.5))
-    gate = area_at(Vector3(0,0.8,end_z),Vector3(3.2,1.6,2))
+    var end: Vector3 = route_points.back()
+    var orb_indices = [1, int(route_points.size()/2), route_points.size()-2]
+    for idx in orb_indices:
+        orb(route_points[idx] + Vector3(0,0.7,0))
+    gate = area_at(end+Vector3(0,0.8,0),Vector3(3.6,1.6,3.6))
+    decoration("marker",end+Vector3(1.12,1.30,0),Vector3(0.68,2.45,0.68))
+    var goal_mesh = MeshInstance3D.new()
+    var ring = TorusMesh.new()
+    ring.inner_radius = 1.12
+    ring.outer_radius = 1.38
+    goal_mesh.mesh = ring
+    var goal_mat = palette_material("goal_ring",Color("ffcf70"),0.32,0.42)
+    goal_mat.emission_enabled = true
+    goal_mat.emission = Color("e9a648")
+    goal_mat.emission_energy_multiplier = 0.65
+    goal_mesh.material_override = goal_mat
+    course.add_child(goal_mesh)
+    goal_mesh.position = end+Vector3(0,0.10,0)
     gate.body_entered.connect(func(body):
         if body == ball and count == 3 and not finished:
             finish_course())
+
     ball = RigidBody3D.new()
     course.add_child(ball)
     ball.position = spawn
@@ -547,63 +579,92 @@ func start_stage(index: int) -> void:
     home_needs_reset = false
     show_screen("play")
 
-func island_landscape() -> void:
-    var islands = [
-        [Vector3(0,-1.9,0),Vector3(5.6,3.0,6.4)],
-        [Vector3(0,-2.3,-9),Vector3(7.0,3.8,4.6)],
-        [Vector3(-3.55,-1.7,-9),Vector3(2.7,2.8,3.2)],
-        [Vector3(0,-2.1,-17),Vector3(6.1,3.4,4.6)],
-        [Vector3(0,-2.2,-25),Vector3(6.0,3.6,4.5)]
-    ]
-    for entry in islands:
-        var centre: Vector3 = entry[0]
-        var extent: Vector3 = entry[1]
-        centre.y = minf(centre.y,-extent.y*0.5-0.75)
-        decoration("rock",centre,extent)
-        decoration("rock",centre+Vector3(0,-extent.y*0.48,0),extent*0.64)
-        decoration("rock",centre+Vector3(extent.x*0.32,-0.4,0.4),extent*0.40)
-    if stage_index >= 1:
-        for z in [-29.0,-33.0]:
-            decoration("rock",Vector3(0,-2.7,z),Vector3(6.2,3.8,4.5))
-            ruin_arch(Vector3(3.6,-0.3,z),0.82)
-            crystal_cluster(Vector3(-2.1,0.0,z))
+func connect_decks(a: Vector3,b: Vector3,width: float,rail: bool = false) -> PhysicsBody3D:
+    var direction = b-a
+    var middle = (a+b)*0.5-Vector3(0,0.035,0)
+    var length = direction.length()
+    var body = platform(middle,Vector3(width,0.56,length),false) as PhysicsBody3D
+    body.look_at(middle+direction,Vector3.UP)
+    if rail:
+        for side in [-1.0,1.0]:
+            var rp = Vector3(side*(width*0.5-0.15),0.16,0)
+            var rs = Vector3(0.18,0.32,maxf(0.3,length-3.8))
+            stone_piece(body,rp,rs)
+            collider(body,rs,rp)
+    return body
+
+func build_route() -> void:
+    route_points.clear()
+    stage_length = 0.0
+    for pair in ROUTES[stage_index]:
+        route_points.append(Vector3(float(pair[0]),0,float(pair[1])))
+    var width = 4.8 if stage_index == 0 else maxf(3.35,4.65-float(stage_index)*0.10)
+    for i in range(route_points.size()-1):
+        var a: Vector3 = route_points[i]
+        var b: Vector3 = route_points[i+1]
+        stage_length += a.distance_to(b)
+        var segment = connect_decks(a,b,width,i%3==1)
+        if i==2: bridge=segment
+    for i in range(route_points.size()):
+        var point: Vector3 = route_points[i]
+        var size = width+0.75 if i>0 and i<route_points.size()-1 else 6.0
+        platform(point,Vector3(size,0.65,size))
     if stage_index >= 2:
-        for z in [-37.0,-41.0]:
-            decoration("rock",Vector3(0,-3.0,z),Vector3(6.8,4.0,4.7))
-            ruin_arch(Vector3(-3.6,-0.2,z),1.05)
-            crystal_cluster(Vector3(2.2,0.0,z))
-    crystal_cluster(Vector3(2.2,0.0,-9))
-    crystal_cluster(Vector3(-2.4,0.0,-25))
-    # Border foliage, deliberately off the path of the marble.
-    for v in [Vector3(-2.1,0,0.6),Vector3(2.5,0,-9.8),Vector3(-2.15,0,-17.2),Vector3(-2.15,0,-25.2)]:
-        decoration("forest_tree",v+Vector3(0,1.55,0),Vector3(1.8,3.1,1.8))
-        decoration("forest_bush",v+Vector3(0.28,0.33,0.55),Vector3(0.85,0.66,0.8))
-        decoration("flower",v+Vector3(0.38,0.17,-0.65),Vector3(0.35,0.34,0.35))
-        decoration("grass",v+Vector3(-0.2,0.15,0.75),Vector3(0.4,0.30,0.4))
-    # Distinct floating landmarks beside the route.
-    for i in range(6):
-        var side = -1.0 if i % 2 == 0 else 1.0
-        var centre = Vector3(side*(7.4+float(i%3)*1.5),-2.4-float(i%2)*0.7,-float(i)*5.0)
-        var extent = Vector3(4.5+float(i%2),3.8,4.3)
-        decoration("cliff",centre,extent)
-        decoration("rock",centre+Vector3(0,-2.4,0),Vector3(2.6,2.0,2.4))
-        decoration("forest_tree_alt",centre+Vector3(-0.7,3.1,0),Vector3(2.2,3.8,2.1))
-        decoration("forest_tree",centre+Vector3(0.9,2.7,0.45),Vector3(1.6,2.8,1.5))
-        decoration("forest_bush",centre+Vector3(0.1,2.3,1.0),Vector3(1.0,0.7,1.0))
-    decoration("waterfall",Vector3(-3.9,-3.1,-17),Vector3(2.3,5.0,2.5))
-    decoration("waterfall",Vector3(7.3,-4.0,-7),Vector3(3.0,6.5,3.0))
-    # Actual imported bridge model on a background island, not a collider.
-    decoration("bridge_wood",Vector3(8.1,-0.6,-15),Vector3(1.8,0.6,3.5))
-    # Architectural landmarks outside the playable path; preserve all collision geometry.
-    ruin_arch(Vector3(-7.4,-0.5,0.0),1.15)
-    ruin_arch(Vector3(8.9,-0.2,-5.0),1.0)
-    ruin_arch(Vector3(-10.4,-0.4,-10.0),1.2)
-    flowing_water(Vector3(-4.1,-3.1,-15.65),1.15,4.8)
-    flowing_water(Vector3(7.4,-4.0,-5.4),1.6,6.3)
-    for i in range(6):
-        var v = Vector3((-1.0 if i%2==0 else 1.0)*(7.4+float(i%3)*1.5),0.05-float(i%2)*0.7,-float(i)*5.0)
-        decoration("flower",v+Vector3(0.55,0.15,0.65),Vector3(0.48,0.45,0.48))
-        decoration("grass",v+Vector3(-0.35,0.1,0.9),Vector3(0.66,0.45,0.66))
+        var anchor: Vector3 = route_points[1]
+        var side = -1.0 if anchor.x<=0.0 else 1.0
+        var bonus = anchor+Vector3(side*6.4,0.45,0)
+        connect_decks(anchor,bonus,2.8,true)
+        secret_origin = bonus
+        secret_platform = platform(bonus,Vector3(3.8,0.65,3.8),true) as AnimatableBody3D
+        var bonus_area = area_at(bonus+Vector3(0,0.90,0),Vector3(1.55,1.7,1.55))
+        var reward = marble_visual(bonus_area,0.56)
+        var mat = palette_material("secret_reward",Color("8ae7ff"),0.22,0.25)
+        mat.emission_enabled = true
+        mat.emission = Color("35b8d1")
+        mat.emission_energy_multiplier = 0.8
+        for mesh in reward.find_children("*","MeshInstance3D",true,false):
+            mesh.material_override = mat
+        bonus_area.body_entered.connect(func(body):
+            if body == ball and not secret_claimed and not finished:
+                secret_claimed = true
+                coins += 25
+                earned_total += 25
+                write_save()
+                play_ui_sound()
+                bonus_area.queue_free())
+    for i in range(2,route_points.size()-1,3):
+        if stage_index >= 3:
+            var side = -1.0 if i%2==0 else 1.0
+            make_hazard(route_points[i]+Vector3(side*(width*0.5-0.15),0.42,0))
+    if is_instance_valid(sky_surface):
+        sky_surface.sky_top_color = Color(SKY_COLORS[stage_index])
+        sky_surface.sky_horizon_color = Color(SKY_COLORS[stage_index]).lerp(Color.WHITE,0.65)
+
+func island_landscape() -> void:
+    for i in range(route_points.size()):
+        var point: Vector3 = route_points[i]
+        if i%2==0 or i==route_points.size()-1:
+            decoration("rock",point+Vector3(0,-2.9,0),Vector3(4.7,4.4,4.5))
+        if i==0 or i==route_points.size()-1: continue
+        var side = -1.0 if i%2==0 else 1.0
+        var offset = point+Vector3(side*5.8,-2.5,0)
+        if stage_index in [0,1,6]:
+            decoration("rock",offset,Vector3(3.4,3.6,3.4))
+            decoration("forest_tree_alt",offset+Vector3(0,3.15,0),Vector3(1.65,2.6,1.65))
+            decoration("forest_bush",offset+Vector3(0.65,2.1,0.5),Vector3(0.8,0.6,0.8))
+        elif stage_index in [2,4,9,10]:
+            decoration("cliff",offset,Vector3(3.4,4.2,3.4))
+            ruin_arch(offset+Vector3(0,2.1,0),0.85 if stage_index==4 else 1.12)
+        elif stage_index in [3,5,7,11]:
+            decoration("rock",offset,Vector3(3.8,4.2,3.5))
+            crystal_cluster(offset+Vector3(0,2.0,0))
+            if i%2==1: crystal_cluster(offset+Vector3(0.9,2.1,0.7))
+        else:
+            decoration("cliff",offset,Vector3(3.4,4.4,3.5))
+            flowing_water(offset+Vector3(0,-1.0,1.65),1.7,5.4)
+    if stage_index in [4,8,10]:
+        var p: Vector3 = route_points[2]
+        decoration("bridge_wood",p+Vector3(7.8,-0.8,0),Vector3(2.6,0.9,4.0))
 
 func _physics_process(delta: float) -> void:
     if not is_instance_valid(ball) or finished or menu_open:
@@ -613,10 +674,12 @@ func _physics_process(delta: float) -> void:
     respawn_guard = maxf(0.0,respawn_guard-delta)
     for hazard in stage_hazards:
         hazard.position.x = float(hazard.get_meta("origin_x")) + sin(clock * 1.45 + hazard.position.z)*0.24
+    if is_instance_valid(secret_platform):
+        secret_platform.position.y = secret_origin.y+sin(clock*1.4)*0.035
     var axis = move
     axis += Vector2(float(Input.is_physical_key_pressed(KEY_D))-float(Input.is_physical_key_pressed(KEY_A)),float(Input.is_physical_key_pressed(KEY_S))-float(Input.is_physical_key_pressed(KEY_W)))
     axis = axis.limit_length(1.0)
-    ball.apply_central_force(Vector3(axis.x,0,axis.y) * 13.5)
+    ball.apply_central_force(Vector3(axis.x,0,axis.y) * (2.0 if braking else 13.5))
     var horizontal = Vector2(ball.linear_velocity.x,ball.linear_velocity.z)
     if horizontal.length() > 4.7:
         var limited = horizontal.limit_length(4.7)
@@ -641,7 +704,11 @@ func finish_course() -> void:
     won = true
     ball.set_deferred("freeze", true)
     move = Vector2.ZERO
-    var stars = lives
+    var target_time = stage_length/2.0+14.0
+    var stars = mini(lives, 3 if elapsed <= target_time else 2)
+    var record: Dictionary = stage_records.get(str(stage_index),{})
+    var previous_time = float(record.get("time",0.0))
+    stage_records[str(stage_index)] = {"time":elapsed if previous_time<=0.0 else minf(previous_time,elapsed),"stars":maxi(stars,int(record.get("stars",0)))}
     unlocked_stage = maxi(unlocked_stage,mini(stage_index+1,STAGE_END.size()-1))
     coins += stars * 35
     earned_total += stars * 35
@@ -746,6 +813,8 @@ func read_save() -> void:
         fps = 30 if int(cfg.get_value("settings","fps",60)) == 30 else 60
         victories = maxi(0,int(cfg.get_value("progress","victories",0)))
         earned_total = maxi(0,int(cfg.get_value("progress","earned_total",0)))
+        var records = cfg.get_value("progress","stage_records",{})
+        if records is Dictionary: stage_records = records
 
 func write_save() -> void:
     var cfg = ConfigFile.new()
@@ -763,6 +832,7 @@ func write_save() -> void:
     cfg.set_value("settings","fps",fps)
     cfg.set_value("progress","victories",victories)
     cfg.set_value("progress","earned_total",earned_total)
+    cfg.set_value("progress","stage_records",stage_records)
     cfg.save(SAVE)
 
 func label(parent: Control, text_value: String, font_size: int, rect: Rect2) -> Label:
@@ -820,6 +890,7 @@ func button(parent: Control, caption: String, rect: Rect2) -> Button:
     b.add_theme_constant_override("icon_max_width",35)
     b.add_theme_constant_override("h_separation",12)
     b.layout_direction = Control.LAYOUT_DIRECTION_LTR
+    b.expand_icon = true
     skin_button(b,"green")
     b.pressed.connect(play_ui_sound)
     return b
@@ -842,7 +913,9 @@ func royal_style(key: String, round_button: bool = false) -> StyleBox:
 
 func skin_button(b: Button, theme_name: String, round_button: bool = false) -> void:
     var key = "emerald" if theme_name == "green" else ("red" if theme_name == "red" else ("gold" if theme_name == "gold" else "stone"))
-    if round_button: key = "round"
+    if round_button:
+        key = "round"
+        b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
     b.add_theme_stylebox_override("normal",royal_style(key,round_button))
     b.add_theme_stylebox_override("hover",royal_style(key,round_button))
     b.add_theme_stylebox_override("pressed",royal_style(key if round_button else "pressed",round_button))
@@ -959,12 +1032,14 @@ func make_ui() -> void:
 
     menu = make_page("main")
     menu_panel = page_panels["main"]
-    menu_panel.add_theme_stylebox_override("panel",StyleBoxEmpty.new())
+    menu_panel.add_theme_stylebox_override("panel",panel_style(Color(0.055,0.105,0.12,0.52),Color(0.75,0.61,0.35,0.65),28))
     menu_title = page_titles["main"]
-    menu_title.add_theme_font_size_override("font_size",68)
+    menu_title.add_theme_font_size_override("font_size",54)
+    menu_title.clip_text = false
+    menu_title.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
     menu_title.add_theme_color_override("font_outline_color",Color("182a20"))
     menu_title.add_theme_constant_override("outline_size",12)
-    menu_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    menu_title.autowrap_mode = TextServer.AUTOWRAP_OFF
     menu_title.max_lines_visible = 2
     menu_subtitle = label(menu,"",28,Rect2())
     menu_hint = label(menu,"",20,Rect2())
@@ -1039,9 +1114,12 @@ func make_ui() -> void:
     action(settings,"about","gear",func(): show_screen("about"),"grey")
     action(settings,"settings_back","back",func(): show_screen(settings_return),"grey")
     var levels = make_page("levels")
-    action(levels,"level_one","play",func(): start_stage(0))
-    action(levels,"level_two","play",func(): start_stage(1),"gold")
-    action(levels,"level_three","play",func(): start_stage(2),"grey")
+    for i in range(6):
+        var level = button(levels,"",Rect2())
+        level.pressed.connect(func(): start_stage(level_page*6+i))
+        level_buttons.append(level)
+    action(levels,"levels_prev","back",func(): level_page=maxi(0,level_page-1); update_language(),"grey")
+    action(levels,"levels_next","play",func(): level_page=mini(1,level_page+1); update_language(),"gold")
     action(levels,"levels_back","back",func(): show_screen("main"),"grey")
     var achievements = make_page("achievements")
     achievement_text = label(achievements,"",28,Rect2())
@@ -1110,8 +1188,8 @@ func layout_ui() -> void:
     place(actions["settings"],bx,by+bh*3.24,bw*0.49,bh)
     place(actions["achievements"],bx+bw*0.51,by+bh*3.24,bw*0.49,bh)
     place(menu_hint,bx,by+bh*4.24,bw,35)
-    actions["settings"].add_theme_font_size_override("font_size",25)
-    actions["achievements"].add_theme_font_size_override("font_size",25)
+    actions["settings"].add_theme_font_size_override("font_size",22)
+    actions["achievements"].add_theme_font_size_override("font_size",21)
     menu_play.add_theme_font_size_override("font_size",42)
     actions["levels"].add_theme_font_size_override("font_size",33)
     actions["shop"].add_theme_font_size_override("font_size",33)
@@ -1145,17 +1223,25 @@ func layout_ui() -> void:
     for i in range(settings_keys.size()):
         place(actions[settings_keys[i]],bx,dy+244+i*setting_step,bw,setting_step-9.0)
         actions[settings_keys[i]].add_theme_font_size_override("font_size",30)
-    for key in ["levels","achievements","about"]:
+    for key in ["achievements","about"]:
         var py2 = maxf(20,(h-540)*0.5)
         place(page_panels[key],px,py2,pw,540)
         place(page_titles[key],px+12,py2+18,pw-24,72)
         place(actions[key+"_back"],bx,py2+438,bw,70)
-        if key == "levels":
-            for i in range(3):
-                place(actions[["level_one","level_two","level_three"][i]],bx,py2+105+i*105,bw,88)
         if key == "achievements": place(achievement_text,bx,py2+105,bw,300)
         if key == "about": place(info_text,bx,py2+105,bw,300)
 
+    var lh = minf(h-48,820.0)
+    var ly = (h-lh)*0.5
+    place(page_panels["levels"],px,ly,pw,lh)
+    place(page_titles["levels"],px+12,ly+15,pw-24,68)
+    var step = (lh-230.0)/6.0
+    for i in range(6):
+        place(level_buttons[i],bx,ly+92+i*step,bw,step-8)
+        level_buttons[i].add_theme_font_size_override("font_size",23)
+    place(actions["levels_prev"],bx,ly+lh-130,bw*0.48,55)
+    place(actions["levels_next"],bx+bw*0.52,ly+lh-130,bw*0.48,55)
+    place(actions["levels_back"],bx,ly+lh-66,bw,52)
     var ph = 520.0
     var py = maxf(20,(h-ph)*0.5)
     place(page_panels["pause"],px,py,pw,ph)
@@ -1191,7 +1277,9 @@ func show_screen(next: String) -> void:
         preview_world.render_target_update_mode = SubViewport.UPDATE_ALWAYS if next in ["main","shop"] else SubViewport.UPDATE_DISABLED
         if is_instance_valid(preview_pedestal): preview_pedestal.visible = next == "main"
         layout_ui.call_deferred()
-    if next == "levels": update_language()
+    if next == "levels":
+        level_page = int(unlocked_stage/6)
+        update_language()
     if next == "achievements": refresh_achievements()
     if next == "shop" or next == "main": refresh_shop()
     if next == "settings": update_language()
@@ -1269,11 +1357,22 @@ func update_language() -> void:
     page_titles["levels"].text = more(0)
     page_titles["achievements"].text = more(1)
     page_titles["about"].text = more(7)
-    for i in range(3):
-        var level_button: Button = actions[["level_one","level_two","level_three"][i]]
-        level_button.text = "%02d  ·  %s" % [i+1,STAGE_NAMES[lang][i]]
-        level_button.disabled = i > unlocked_stage
-        level_button.icon = tex("lock" if i > unlocked_stage else "play")
+    for i in range(level_buttons.size()):
+        var idx = level_page*6+i
+        var level_button: Button = level_buttons[i]
+        var record: Dictionary = stage_records.get(str(idx),{})
+        var stars = int(record.get("stars",0))
+        level_button.text = "%02d  ·  %s  %s" % [idx+1,STAGE_NAMES[lang][idx],"★".repeat(stars)]
+        level_button.disabled = idx > unlocked_stage
+        level_button.icon = tex("lock" if idx > unlocked_stage else "play")
+    actions["levels_prev"].text = more(13)+"  1/2"
+    actions["levels_next"].text = more(12)+"  2/2"
+    actions["levels_prev"].disabled = level_page==0
+    actions["levels_next"].disabled = level_page==1
+    page_titles["levels"].text = more(0)+"  "+str(level_page+1)+"/2"
+    for control in ui_root.find_children("*","Control",true,false):
+        if control is Label or control is Button:
+            control.text_direction = Control.TEXT_DIRECTION_RTL if lang=="ar" else Control.TEXT_DIRECTION_LTR
     next_stage_button.text = {"en":"NEXT COURSE","ar":"المرحلة التالية","pt":"PRÓXIMA FASE"}[lang]
     for key in ["levels","achievements","about"]:
         actions[key+"_back"].text = word(6)
@@ -1351,7 +1450,10 @@ func restore_settings() -> void:
 
 func refresh_achievements() -> void:
     if not is_instance_valid(achievement_text): return
-    achievement_text.text = "%s: %d\n\n%s: %.1fs\n\n%s: %d\n\n%s: %s" % [more(9),victories,more(10),best,more(16),earned_total,more(15),"✓" if victories>0 else more(17)]
+    var total_stars = 0
+    for record in stage_records.values():
+        total_stars += int(record.get("stars",0))
+    achievement_text.text = "%s: %d/12\n\n★ %d/36\n\n%s: %.1fs\n\n%s: %d" % [more(9),stage_records.size(),total_stars,more(10),best,more(16),earned_total]
 
 func setup_preview() -> void:
     var root = Node3D.new()

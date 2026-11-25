@@ -54,8 +54,9 @@ jobs:
         run: |
           set -euo pipefail
           export XDG_DATA_HOME="$RUNNER_TEMP/godot-smoke-data"
-          timeout 120 godot --headless --path . --script tools/smoke.gd 2>&1 | tee smoke.log
+          timeout 480 godot --headless --path . --script tools/smoke.gd 2>&1 | tee smoke.log
           grep -q SMOKE_OK smoke.log
+          test "$(grep -c FULL_COURSE_OK smoke.log)" -eq 12
           if grep -E 'SCRIPT ERROR|Parse Error' import.log smoke.log; then exit 1; fi
       - name: Export and sign prototype
         env:
@@ -81,6 +82,7 @@ jobs:
           mkdir -p build
           godot --headless --path . --export-release Android build/unsigned.apk
           test -s build/unsigned.apk
+          test "$(stat -c%s build/unsigned.apk)" -gt 59000000
           bt="$ANDROID_HOME/build-tools/35.0.1"
           "$bt/zipalign" -P 16 -f 4 build/unsigned.apk "$RUNNER_TEMP/aligned.apk"
           "$bt/apksigner" sign --ks "$ks" --ks-key-alias "$KEY_ALIAS" --ks-pass env:KS_PASS --key-pass env:KEY_PASS --out build/MarbleQuest3D-prototype.apk "$RUNNER_TEMP/aligned.apk"
