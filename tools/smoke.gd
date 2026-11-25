@@ -34,16 +34,19 @@ func run() -> void:
         scene.layout_ui()
         await process_frame
         if scene.heading.text.is_empty() or not scene.hud_panel.get_rect().encloses(scene.heading.get_rect()) or not scene.hud_panel.get_rect().encloses(scene.help.get_rect()) or not scene.menu_panel.get_rect().encloses(scene.menu_title.get_rect()) or not scene.menu_panel.get_rect().encloses(scene.menu_subtitle.get_rect()) or scene.pad.get_rect().intersects(scene.brake.get_rect()):
+            push_error("Smoke failed: if scene.heading.text.is_empty() or not scene.hud_panel.get_rect().encloses(scene.heading.get_rect()) or not scene.hud_panel.get_rect().encloses(scene.help.get_rect()) or not scene.menu_panel.get_rect().encloses(scene.menu_title.get_rect()) or not scene.menu_panel.get_rect().encloses(scene.menu_subtitle.get_rect()) or scene.pad.get_rect().intersects(scene.brake.get_rect()):")
             quit(1)
             return
     scene.set_menu(true)
     if not scene.menu.visible or scene.hud.visible:
+        push_error("Smoke failed: if not scene.menu.visible or scene.hud.visible:")
         quit(1)
         return
     scene.set_menu(false)
     scene.reset_course()
     await process_frame
     if scene.count != 0 or scene.finished or not is_instance_valid(scene.ball):
+        push_error("Smoke failed: if scene.count != 0 or scene.finished or not is_instance_valid(scene.ball):")
         quit(1)
         return
     if scene.lives != 3 or scene.tex("pause") == null or scene.tex("green_rect") == null:
@@ -52,38 +55,55 @@ func run() -> void:
         return
     scene.show_screen("pause")
     if not scene.menu_open or not scene.ball.freeze or not scene.pages["pause"].visible:
+        push_error("Smoke failed: if not scene.menu_open or not scene.ball.freeze or not scene.pages[\"pause\"].visible:")
         quit(1)
         return
     var paused_time = scene.elapsed
     for i in range(4):
         await physics_frame
     if scene.elapsed != paused_time:
+        push_error("Smoke failed: if scene.elapsed != paused_time:")
         quit(1)
         return
     scene.show_screen("settings")
     if not scene.pages["settings"].visible or scene.pages["pause"].visible:
+        push_error("Smoke failed: if not scene.pages[\"settings\"].visible or scene.pages[\"pause\"].visible:")
         quit(1)
         return
     scene.show_screen("shop")
     if not scene.pages["shop"].visible or scene.shop_buttons.size()!=12:
+        push_error("Smoke failed: if not scene.pages[\"shop\"].visible or scene.shop_buttons.size()!=12:")
         quit(1)
         return
     scene.coins = 200
-    scene.owned = [0]
+    # Preserve Array[int]; assigning an untyped literal through a dynamic Node fails.
+    scene.owned.clear()
+    scene.owned.append(0)
+    scene.equipped = 0
+    scene.preview_index = 0
+    if scene.audio_player.stream == null:
+        push_error("Smoke: bundled UI click not loaded")
+        quit(1)
+        return
     scene.select_preview(11)
     if scene.preview_index != 11 or not is_instance_valid(scene.preview_mesh):
+        push_error("Smoke failed: if scene.preview_index != 11 or not is_instance_valid(scene.preview_mesh):")
         quit(1)
         return
     scene.select_preview(1)
     if scene.preview_index != 0:
+        push_error("Smoke failed: if scene.preview_index != 0:")
         quit(1)
         return
     scene.buy_or_equip(1)
     if scene.coins != 140 or not scene.owned.has(1) or scene.equipped != 1:
+        push_error("Smoke failed: if scene.coins != 140 or not scene.owned.has(1) or scene.equipped != 1:")
         quit(1)
         return
     scene.buy_or_equip(1)
-    if scene.coins != 140:
+    scene.buy_or_equip(11)
+    if scene.coins != 140 or scene.owned.has(11) or scene.equipped != 1:
+        push_error("Smoke failed: if scene.coins != 140 or scene.owned.has(11) or scene.equipped != 1:")
         quit(1)
         return
     scene.show_screen("play")
@@ -91,21 +111,26 @@ func run() -> void:
         scene.respawn_guard = 0.0
         scene.lose_attempt()
         await process_frame
+        scene.lose_attempt()
         if scene.lives != 2-i:
+            push_error("Smoke failed: if scene.lives != 2-i:")
             quit(1)
             return
     scene.lose_attempt()
     if scene.lives != 0 or not scene.finished or scene.won or not scene.result.visible:
+        push_error("Smoke failed: if scene.lives != 0 or not scene.finished or scene.won or not scene.result.visible:")
         quit(1)
         return
     scene.reset_course()
     if scene.lives != 3 or scene.finished:
+        push_error("Smoke failed: if scene.lives != 3 or scene.finished:")
         quit(1)
         return
     scene.finish_course()
     var awarded = scene.coins
     scene.finish_course()
     if not scene.won or awarded != 245 or scene.coins != awarded:
+        push_error("Smoke failed: if not scene.won or awarded != 245 or scene.coins != awarded:")
         quit(1)
         return
     print("SMOKE_OK")
