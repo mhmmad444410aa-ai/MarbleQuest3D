@@ -46,13 +46,15 @@ print(selected)
 
 # Download only publisher-distributed CC0 packs and extract selected models plus
 # their declared glTF dependencies. Do not copy premium/source editions.
-def fetch_zip(urls, cap=160_000_000):
+def fetch_zip(urls, cap=160_000_000, expected_sha=None):
     for url in urls:
         try:
             with urllib.request.urlopen(urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0'}),timeout=120) as r:
                 blob=r.read(cap+1)
             if len(blob)>cap or not zipfile.is_zipfile(io.BytesIO(blob)):
                 raise ValueError('invalid or oversized archive')
+            if expected_sha and hashlib.sha256(blob).hexdigest()!=expected_sha:
+                raise ValueError('archive SHA-256 mismatch')
             return blob,url
         except Exception as exc:
             print('Download attempt:',url,exc,flush=True)
@@ -63,7 +65,8 @@ def token(name):
     return re.sub(r'[^a-z0-9]','',Path(name).stem.lower())
 
 def extract_pack(pack, urls, choices):
-    blob, source_url=fetch_zip(urls)
+    expected_sha='fa7974a0d342bfe63c38664ba9f8ec1a4aab8ea25f099bdc56870e33588c4d9d' if pack=='kenney-nature' else None
+    blob, source_url=fetch_zip(urls, expected_sha=expected_sha)
     archive=zipfile.ZipFile(io.BytesIO(blob))
     names=set(archive.namelist())
     for n in names:
@@ -118,13 +121,14 @@ def extract_pack(pack, urls, choices):
     return ({k:'res://assets/environment/'+pack+'/'+v for k,v in selected.items()}, {'source':source_url,'license':'CC0-1.0','archive_sha256':hashlib.sha256(blob).hexdigest(),'selected':selected})
 
 nature, nature_source=extract_pack('kenney-nature',[
+    'https://github.com/WaviestSun/atelier-packs/releases/download/packs-2/kenney_nature-kit.zip',
     'https://kenney.nl/media/pages/assets/nature-kit/37ac38a37b-1677698939/kenney_nature-kit.zip'
 ],[
     ('cliff',['cliffrock','cliffblockrock','cliff'],[r'cliff(?:block)?rock[a-z0-9]*']),
     ('waterfall',['cliffwaterfallrock','cliffwaterfall'],[r'cliff.*waterfall.*',r'waterfall.*']),
     ('rock',['rocklargea','rocklargeb'],[r'rocklarge[a-z0-9]*']),
-    ('bridge_wood',['bridgecenter','bridgecenterwood','bridgewood'],[r'bridgecenter[a-z0-9]*',r'bridge.*wood.*']),
-    ('grass',['grass','grasstall','plantflattall'],[r'grass[a-z0-9]*']),
+    ('bridge_wood',['bridgecenterwood','bridgewood','bridgecenter'],[r'bridgecenter[a-z0-9]*',r'bridge.*wood.*']),
+    ('grass',['grass','grasslarge','grassleafs','grasstall'],[r'grass[a-z0-9]*']),
     ('flower',['flowerpurplea','floweryellowa','flowerreda'],[r'flower[a-z0-9]*']),
 ])
 forest, forest_source=extract_pack('quaternius-nature',[
@@ -133,7 +137,7 @@ forest, forest_source=extract_pack('quaternius-nature',[
 ],[
     ('forest_tree',['commontree1','commontree2','tree1'],[r'common.*tree.*',r'.*tree.*']),
     ('forest_tree_alt',['commontree2','commontree4','pinetree1','tree2'],[r'common.*tree.*',r'.*tree.*']),
-    ('forest_bush',['bushcommon','commonbush','bush1'],[r'.*bush.*']),
+    ('forest_bush',['bushcommon','commonbush','bush1','bush'],[r'.*bush.*',r'.*shrub.*',r'.*fern.*']),
 ])
 manifest_path=ROOT/'assets'/'manifest.json'
 manifest=json.loads(manifest_path.read_text())
