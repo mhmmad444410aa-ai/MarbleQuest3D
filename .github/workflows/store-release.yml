@@ -1,0 +1,165 @@
+name: Store Release APK (stable signing)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  prototype:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      GODOT_VERSION: 4.6.3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require permanent signing secrets and accessible privacy policy
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for key in KS_B64 KS_PASS KEY_ALIAS KEY_PASS; do
+            if [ -z "${!key}" ]; then echo "::error::Missing signing secret. Configure all four ANDROID signing secrets."; exit 1; fi
+          done
+          curl --fail --location --retry 2 --max-time 40 'https://mhmmad444410aa-ai.github.io/MarbleQuest3D/' -o /tmp/privacy.html
+          grep -Fq 'Marble Quest 3D Privacy Policy' /tmp/privacy.html
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android tools using runner SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          manager="$sdk/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$manager"
+          echo "ANDROID_HOME=$sdk" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$sdk" >> "$GITHUB_ENV"
+          echo "$sdk/platform-tools" >> "$GITHUB_PATH"
+          echo "$sdk/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          "$manager" --sdk_root="$sdk" --version
+          "$manager" --sdk_root="$sdk" 'platform-tools' 'platforms;android-35' 'build-tools;35.0.1' 'platforms;android-36' 'build-tools;36.0.0'
+          test -x "$sdk/build-tools/35.0.1/apksigner"
+      - name: Fetch official Godot and matching templates
+        run: |
+          set -euo pipefail
+          base="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-stable"
+          curl --fail --location --retry 3 "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" -o /tmp/godot.zip
+          curl --fail --location --retry 3 "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz" -o /tmp/templates.tpz
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          sudo install -m 755 "/tmp/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64" /usr/local/bin/godot
+          unzip -q /tmp/templates.tpz -d /tmp/templates
+          mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable" "$HOME/.config/godot"
+          cp -a /tmp/templates/templates/. "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
+          printf '[gd_resource type="EditorSettings" format=3]\n[resource]\nexport/android/android_sdk_path = "%s"\nexport/android/java_sdk_path = "%s"\n' "$ANDROID_HOME" "$JAVA_HOME" > "$HOME/.config/godot/editor_settings-4.6.tres"
+          godot --version
+      - name: Fetch licensed original assets
+        run: python3 tools/fetch_assets.py
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Generate original HD material artwork
+        run: |
+          python3 -m pip install --only-binary=:all: numpy==2.2.6 Pillow==11.3.0
+          python3 tools/generate_materials.py
+      - name: Generate original non-musical sound effects
+        run: python3 tools/generate_sfx.py
+      - name: Import assets
+        run: godot --headless --path . --editor --import > import.log 2>&1 || (cat import.log; exit 1)
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+          export XDG_DATA_HOME="$RUNNER_TEMP/godot-smoke-data"
+          timeout 1450 godot --headless --path . --script tools/smoke.gd 2>&1 | tee smoke.log
+          grep -q SMOKE_OK smoke.log
+          test "$(grep -c FULL_COURSE_OK smoke.log)" -eq 24
+          if grep -E 'SCRIPT ERROR|Parse Error' import.log smoke.log; then exit 1; fi
+      - name: Export and sign commercial package
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          ks="$RUNNER_TEMP/quest.jks"
+          trap 'rm -f "$ks"' EXIT
+          expected=com.mhmmad.marblequest3d
+          printf '%s' "$KS_B64" | base64 --decode > "$ks"
+          keytool -list -keystore "$ks" -storepass:env KS_PASS -alias "$KEY_ALIAS" >/dev/null
+          mkdir -p build
+          godot --headless --path . --export-release Android build/unsigned.apk
+          test -s build/unsigned.apk
+          bt="$ANDROID_HOME/build-tools/35.0.1"
+          "$bt/zipalign" -P 16 -f 4 build/unsigned.apk "$RUNNER_TEMP/aligned.apk"
+          "$bt/apksigner" sign --ks "$ks" --ks-key-alias "$KEY_ALIAS" --ks-pass env:KS_PASS --key-pass env:KEY_PASS --out build/MarbleQuest3D-release.apk "$RUNNER_TEMP/aligned.apk"
+          "$bt/apksigner" verify --verbose --print-certs build/MarbleQuest3D-release.apk | tee build/certificate.txt
+          "$bt/aapt" dump badging build/MarbleQuest3D-release.apk > build/badging.txt
+          grep -Fq "package: name='$expected'" build/badging.txt
+          grep -Fq "versionCode='14'" build/badging.txt
+          grep -Fq "versionName='1.7.1'" build/badging.txt
+          if grep -q "uses-permission: name='android.permission.INTERNET'" build/badging.txt; then echo "::error::Offline policy mismatch"; exit 1; fi
+          if grep -q "application-debuggable" build/badging.txt; then echo "::error::Debuggable APK"; exit 1; fi
+          cat build/badging.txt | grep -E '^(package:|sdkVersion:|targetSdkVersion:|native-code:)'
+          "$bt/zipalign" -c -P 16 4 build/MarbleQuest3D-release.apk
+          python3 - <<'PY'
+          from zipfile import ZipFile
+          with ZipFile('build/MarbleQuest3D-release.apk') as z:
+              assert z.testzip() is None
+              for abi in ['arm64-v8a','armeabi-v7a']:
+                  assert any(n.startswith(f'lib/{abi}/') and n.endswith('.so') for n in z.namelist()), abi
+          PY
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: MarbleQuest3D-signed-release
+          path: |
+            build/MarbleQuest3D-release.apk
+            build/certificate.txt
+            build/badging.txt
+            assets/source.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: MarbleQuest3D-store-APK
+          path: build/MarbleQuest3D-release.apk
+          compression-level: 0
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: prototype-diagnostics
+          path: |
+            import.log
+            smoke.log
+          if-no-files-found: ignore
+
+  direct-apk:
+    name: Publish signed store candidate
+    needs: prototype
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: MarbleQuest3D-store-APK
+          path: release
+      - name: Verify and publish signed candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd release
+          mv MarbleQuest3D-release.apk MarbleQuest3D.apk
+          unzip -tq MarbleQuest3D.apk
+          sha256sum MarbleQuest3D.apk > SHA256SUMS.txt
+          tag="store-candidate-1.7.1-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          gh release create "$tag" MarbleQuest3D.apk SHA256SUMS.txt --target "$GITHUB_SHA" --prerelease --title "Marble Quest 3D 1.7.1 - signed store candidate" --notes "Permanent signing secrets used. Offline, ad-free candidate. Automated checks passed; install and visual/device testing required before submission. Privacy: https://mhmmad444410aa-ai.github.io/MarbleQuest3D/"
+          gh release view "$tag" --json url,assets

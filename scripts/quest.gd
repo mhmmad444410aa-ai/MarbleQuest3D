@@ -1473,6 +1473,7 @@ func make_ui() -> void:
     var about = make_page("about")
     info_text = label(about,"",26,Rect2())
     info_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    action(about,"privacy_policy","home",func(): OS.shell_open("https://mhmmad444410aa-ai.github.io/MarbleQuest3D/"),"grey")
     action(about,"about_back","back",func(): show_screen("settings"),"grey")
 
     var paused = make_page("pause")
@@ -1579,7 +1580,9 @@ func layout_ui() -> void:
         place(page_titles[key],px+12,py2+18,pw-24,72)
         place(actions[key+"_back"],bx,py2+438,bw,70)
         if key == "achievements": place(achievement_text,bx,py2+105,bw,300)
-        if key == "about": place(info_text,bx,py2+105,bw,300)
+        if key == "about":
+            place(info_text,bx,py2+105,bw,245)
+            place(actions["privacy_policy"],bx,py2+360,bw,62)
 
     var lh = minf(h-48,820.0)
     var ly = (h-lh)*0.5
@@ -1734,6 +1737,7 @@ func update_language() -> void:
     actions["defaults"].text = more(6)
     actions["about"].text = more(7)
     info_text.text = more(8)
+    actions["privacy_policy"].text = {"en":"Privacy Policy","ar":"سياسة الخصوصية","pt":"Política de Privacidade"}[lang]
     refresh_achievements()
     refresh_lives()
     refresh_shop()
