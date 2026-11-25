@@ -648,14 +648,14 @@ func start_stage(index: int) -> void:
 
 func connect_decks(a: Vector3,b: Vector3,width: float,rail: bool = false) -> PhysicsBody3D:
     var direction = b-a
-    var middle = (a+b)*0.5-Vector3(0,0.045,0)
+    var middle = (a+b)*0.5-Vector3(0,0.012,0)
     var length = direction.length()
     var body = platform(middle,Vector3(width,0.56,length),false) as PhysicsBody3D
     body.look_at(middle+direction,Vector3.UP)
     var theme = stage_index%12
     var trim_mat = palette_material("trim_"+str(theme),Color(DECK_COLORS[theme]).lightened(0.26),0.55,0.20)
     # Side bands stop before junctions; no overlapping coplanar strips.
-    var visible_length = maxf(0.0,length-5.6)
+    var visible_length = maxf(0.0,length-7.0)
     if visible_length>0.25:
         for side in [-1.0,1.0]:
             deck_box(body,Vector3(0.10,0.08,visible_length),Vector3(side*(width*0.5-0.16),0.045,0),trim_mat)
@@ -677,12 +677,10 @@ func connect_decks(a: Vector3,b: Vector3,width: float,rail: bool = false) -> Phy
         deck_box(body,Vector3(0.14,0.018,0.55),Vector3(0,0.012,0),trim_mat)
     return body
 
-func route_height(i: int) -> float:
-    var theme = stage_index%12
-    if theme in [2,5,10,11]:
-        return sin(float(i)*0.75)*0.55
-    if theme in [3,8] and stage_index>=12:
-        return float(i)*0.13
+func route_height(_i: int) -> float:
+    # Mandatory junctions share one level. Previously the slope ran underneath
+    # a higher flat junction and exposed a vertical lip to the rolling sphere.
+    # Elevated bonus routes remain independent of mandatory progression.
     return 0.0
 
 func build_route() -> void:
@@ -713,8 +711,12 @@ func build_route() -> void:
     if stage_index >= 2:
         var anchor: Vector3 = route_points[1]
         var side = -1.0 if anchor.x<=0.0 else 1.0
-        var bonus = anchor+Vector3(side*6.4,0.45,0)
-        connect_decks(anchor,bonus,2.8,true)
+        var bonus = anchor+Vector3(side*7.4,0.22,0)
+        var ramp_start = anchor+Vector3(side*2.1,0,0)
+        var ramp_end = bonus-Vector3(side*1.7,0,0)
+        connect_decks(anchor,ramp_start,2.8,false)
+        connect_decks(ramp_start,ramp_end,2.8,false)
+        connect_decks(ramp_end,bonus,2.8,false)
         secret_origin = bonus
         secret_platform = platform(bonus,Vector3(3.8,0.65,3.8),true) as AnimatableBody3D
         var bonus_area = area_at(bonus+Vector3(0,0.90,0),Vector3(1.55,1.7,1.55))
@@ -733,11 +735,15 @@ func build_route() -> void:
                 write_save()
                 play_ui_sound()
                 bonus_area.queue_free())
-    # Side obstacles must stay clear of the route centre and adjacent turns.
+    # Obstacles sit on straight segments, away from the centre and junctions.
     for i in range(2,route_points.size()-1,3):
         if stage_index>=3 and theme in [7,9,11]:
-            var side = -1.0 if i%2==0 else 1.0
-            make_hazard(route_points[i]+Vector3(side*(float(width)*0.5-0.1),0.42,0))
+            var a: Vector3 = route_points[i]
+            var b: Vector3 = route_points[i+1]
+            if a.distance_to(b)<8.0: continue
+            var tangent = (b-a).normalized()
+            var lateral = Vector3(-tangent.z,0,tangent.x)
+            make_hazard((a+b)*0.5+lateral*(width*0.5-0.10)+Vector3(0,0.42,0))
     if is_instance_valid(sky_surface):
         sky_surface.sky_top_color = Color(SKY_COLORS[theme])
         sky_surface.sky_horizon_color = Color(SKY_COLORS[theme]).lerp(Color.WHITE,0.38)

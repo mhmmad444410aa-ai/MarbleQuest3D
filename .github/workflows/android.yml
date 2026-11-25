@@ -46,9 +46,12 @@ jobs:
           godot --version
       - name: Fetch licensed original assets
         run: python3 tools/fetch_assets.py
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - name: Generate original HD material artwork
         run: |
-          python3 -m pip install numpy==2.2.6 Pillow==11.3.0
+          python3 -m pip install --only-binary=:all: numpy==2.2.6 Pillow==11.3.0
           python3 tools/generate_materials.py
       - name: Import assets
         run: godot --headless --path . --editor --import > import.log 2>&1 || (cat import.log; exit 1)
