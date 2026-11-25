@@ -103,26 +103,47 @@ for name,base,amp in [("gold_metal",(168,121,49),32),("moss",(56,102,44),38),("c
     png(name,N,N,3,data)
     print("Material",name,flush=True)
 
-# Original 2K low-contrast architectural surfaces, individually used on each course.
+
+# 24 original PBR-style albedo and normal maps for the playable floor surfaces.
+# Periodic multiscale mineral/wood relief; deterministic, no imported copyrighted art.
+import numpy as np
+from PIL import Image
 N=2048
-finishes=[(210,218,224),(187,211,194),(230,211,172),(200,191,225),(227,197,167),(222,236,241),(198,215,189),(151,160,176),(182,216,233),(221,198,183),(239,229,210),(202,190,228)]
-for i,base in enumerate(finishes):
-    data=bytearray()
-    cols=[math.sin(TAU*x/N*(3+i%4)) for x in range(N)]
-    fine=[math.sin(TAU*x/N*(89+i*3)) for x in range(N)]
-    for y in range(N):
-        v=y/N
-        wave=math.sin(TAU*v*(6+i%5))
-        rows=int(v*(2+i%3))
-        fine_y=math.sin(TAU*v*(67+i))
-        for x in range(N):
-            u=x/N
-            a=(u*(2+i%3)+rows*.5)%1
-            b=(v*(2+i%3))%1
-            edge=min(a,1-a,b,1-b)
-            seam=12*max(0,1-edge*140)
-            grain=cols[x]*wave*4+fine[x]*fine_y*2
-            veins=math.sin(TAU*(u*2+v*3)+cols[x]*1.8)*3
-            data.extend(bytes(clamp(c+grain+veins-seam) for c in base))
-    png("deck_%02d"%i,N,N,3,data)
-    print("Architectural surface",i,flush=True)
+u=np.arange(N,dtype=np.float32)[None,:]/N
+v=np.arange(N,dtype=np.float32)[:,None]/N
+finishes=[(96,111,116),(70,103,83),(145,115,80),(105,92,139),(125,84,51),(112,149,169),(103,126,80),(61,71,87),(71,113,140),(130,84,66),(143,140,126),(102,90,142)]
+for i in range(24):
+    t=i%12
+    rng=np.random.default_rng(1207+i)
+    noise=np.zeros((N,N),dtype=np.float32)
+    for freq,amp in [(8,0.38),(32,0.25),(128,0.15),(512,0.075),(1024,0.035)]:
+        field=rng.integers(0,256,(freq,freq),dtype=np.uint8)
+        # Bicubic scale a periodic field, including wraparound boundary samples.
+        tile=np.tile(field,(3,3))
+        im=Image.fromarray(tile).resize((N*3,N*3),Image.Resampling.BILINEAR)
+        noise+=(np.asarray(im)[N:2*N,N:2*N].astype(np.float32)/255-.5)*amp
+    warp=np.sin(TAU*(u*3+v*2))*0.016
+    if t in [4,9]:
+        coord=(u*8+warp)%1
+        seam=np.clip(np.minimum(coord,1-coord)*22,0,1)
+        grain=np.sin(TAU*(u*73+v*2+noise*0.9))*0.07
+        relief=0.55+noise+grain-(1-seam)*0.18
+    elif t in [3,5,7,11]:
+        vein=np.abs(np.sin(TAU*(u*3+v*4+noise*1.1)))
+        relief=0.52+noise*0.95-np.maximum(0,0.13-vein)*0.8
+    else:
+        row=np.floor(v*4)
+        a=(u*4+(row%2)*0.5)%1
+        b=(v*4)%1
+        edge=np.minimum(np.minimum(a,1-a),np.minimum(b,1-b))
+        relief=0.50+noise-(1-np.clip(edge*55,0,1))*0.15
+    relief=relief.astype(np.float32)
+    color=np.asarray(finishes[t],dtype=np.float32)[None,None,:]
+    rgb=np.clip(color*(0.85+relief[:,:,None]*0.44)+noise[:,:,None]*32,0,255).astype(np.uint8)
+    Image.fromarray(rgb).save(OUT/("deck_%02d.png"%i),compress_level=4)
+    dx=(np.roll(relief,-1,axis=1)-np.roll(relief,1,axis=1))*9
+    dy=(np.roll(relief,-1,axis=0)-np.roll(relief,1,axis=0))*9
+    inv=1/np.sqrt(dx*dx+dy*dy+1)
+    norm=np.stack([127-127*dx*inv,127-127*dy*inv,127+127*inv],axis=-1)
+    Image.fromarray(np.clip(norm,0,255).astype(np.uint8)).save(OUT/("deck_normal_%02d.png"%i),compress_level=4)
+    print("Course surface and relief",i+1,flush=True)

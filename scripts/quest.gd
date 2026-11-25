@@ -55,9 +55,9 @@ var unlocked_stage = 0
 var next_stage_button: Button
 var stage_hazards: Array[AnimatableBody3D] = []
 const STAGE_NAMES = {
- "en":["Sky Crossing","Emerald Passage","Golden Ruins","Crystal Canyon","Amber Bridges","Frost Terrace","Jade Gardens","Obsidian Circuit","Sapphire Falls","Copper Maze","Ivory Citadel","Twilight Summit"],
- "ar":["عبور السماء","ممر الزمرد","الأطلال الذهبية","وادي البلور","جسور الكهرمان","مدرج الصقيع","حدائق اليشم","حلبة السبج","شلالات الياقوت","متاهة النحاس","قلعة العاج","قمة الشفق"],
- "pt":["Travessia Celeste","Passagem Esmeralda","Ruínas Douradas","Cânion de Cristal","Pontes de Âmbar","Terraço Gelado","Jardins de Jade","Circuito de Obsidiana","Cascatas de Safira","Labirinto de Cobre","Cidadela de Marfim","Cume do Crepúsculo"]
+ "en":["Sky Crossing","Emerald Passage","Golden Ruins","Crystal Canyon","Amber Bridges","Frost Terrace","Jade Gardens","Obsidian Circuit","Sapphire Falls","Copper Maze","Ivory Citadel","Twilight Summit","Windward Spiral","Cedar Canopy","Temple Stairway","Amethyst Vault","Timber Traverse","Glacier Run","Lotus Courtyard","Basalt Foundry","Cascade Gorge","Bronze Labyrinth","Moon Palace","Astral Crown"],
+ "ar":["عبور السماء","ممر الزمرد","الأطلال الذهبية","وادي البلور","جسور الكهرمان","مدرج الصقيع","حدائق اليشم","حلبة السبج","شلالات الياقوت","متاهة النحاس","قلعة العاج","قمة الشفق","لولب الرياح","غابة الأرز","مدرج المعبد","قبو الجمشت","جسر الأخشاب","ممر الجليد","باحة اللوتس","مصهر البازلت","وادي الشلالات","متاهة البرونز","قصر القمر","تاج النجوم"],
+ "pt":["Travessia Celeste","Passagem Esmeralda","Ruínas Douradas","Cânion de Cristal","Pontes de Âmbar","Terraço Gelado","Jardins de Jade","Circuito de Obsidiana","Cascatas de Safira","Labirinto de Cobre","Cidadela de Marfim","Cume do Crepúsculo","Espiral dos Ventos","Bosque de Cedros","Escadaria do Templo","Abóbada de Ametista","Travessia de Madeira","Trilha Glacial","Pátio de Lótus","Forja de Basalto","Garganta das Cascatas","Labirinto de Bronze","Palácio Lunar","Coroa Astral"]
 }
 const ROUTES = [
  [[0,2],[0,-5],[0,-9],[0,-13],[0,-17],[0,-21],[0,-25]],
@@ -71,10 +71,22 @@ const ROUTES = [
  [[0,2],[-5,-6],[0,-14],[7,-19],[7,-29],[0,-36],[-7,-42],[-7,-50]],
  [[0,2],[0,-8],[8,-8],[8,-18],[-4,-18],[-4,-28],[5,-34],[5,-45],[0,-51]],
  [[0,2],[-6,-5],[-6,-16],[0,-23],[7,-23],[7,-34],[0,-42],[-6,-48],[0,-55]],
- [[0,2],[7,-6],[0,-14],[-8,-22],[-8,-33],[0,-39],[8,-39],[8,-50],[0,-57],[0,-65]]
+ [[0,2],[7,-6],[0,-14],[-8,-22],[-8,-33],[0,-39],[8,-39],[8,-50],[0,-57],[0,-65]],
+ [[0,2],[6,-5],[10,-13],[6,-21],[-2,-24],[-9,-18],[-12,-10],[-18,-8]],
+ [[0,2],[-4,-7],[-9,-13],[-3,-20],[4,-23],[9,-31],[3,-39],[-4,-46]],
+ [[0,2],[0,-8],[7,-8],[7,-17],[0,-17],[0,-27],[-7,-27],[-7,-37],[0,-44]],
+ [[0,2],[-7,-4],[-12,-12],[-5,-19],[3,-19],[10,-26],[3,-33],[-5,-33],[-9,-42]],
+ [[0,2],[0,-9],[6,-17],[6,-28],[-3,-34],[-3,-45],[5,-52]],
+ [[0,2],[7,-5],[13,-13],[8,-22],[0,-25],[-8,-31],[-12,-40],[-5,-48]],
+ [[0,2],[-8,2],[-8,-8],[0,-14],[8,-14],[8,-24],[0,-31],[-8,-31],[-8,-42],[0,-49]],
+ [[0,2],[6,-5],[0,-12],[-6,-19],[0,-26],[6,-33],[0,-40],[-6,-47],[0,-54]],
+ [[0,2],[-5,-7],[-5,-19],[5,-25],[5,-37],[-5,-43],[-5,-55],[3,-62]],
+ [[0,2],[8,2],[8,-8],[-3,-8],[-3,-18],[8,-18],[8,-28],[-3,-28],[-3,-38],[5,-46]],
+ [[0,2],[-7,-6],[-7,-16],[0,-23],[7,-23],[13,-31],[7,-39],[0,-39],[-7,-47],[0,-55]],
+ [[0,2],[0,-8],[8,-14],[12,-23],[4,-31],[-6,-31],[-13,-40],[-6,-49],[3,-49],[10,-58],[0,-66]]
 ]
-const STAGE_END = [-25.0,-32.0,-37.0,-39.0,-40.0,-43.0,-41.0,-46.0,-50.0,-51.0,-55.0,-65.0]
-const DECK_COLORS = ["e0e6ea","c4e2d0","ebd4ae","c4c2e2","e2c5a7","dceaf1","cadbc3","a9b6cc","b9d8eb","dcc0af","f0e7d6","c5b6e1"]
+const STAGE_COUNT = 24
+const DECK_COLORS = ["6c7c80","426b59","8d7756","625779","85603e","617f91","5e7453","414959","476f82","805649","77756b","645a81"]
 const SKY_COLORS = ["7fb9d9","76b8a6","d6ab75","9387c5","d6a575","a5c6e6","8dbba1","66758e","619ec7","c18d80","aebec9","7776a9"]
 var route_points: Array[Vector3] = []
 var stage_records: Dictionary = {}
@@ -202,13 +214,13 @@ func make_environment() -> void:
     env.sky = sky
     env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
     env.ambient_light_color = Color("d5e6f2")
-    env.ambient_light_energy = 0.68
+    env.ambient_light_energy = 0.42
     world.environment = env
     add_child(world)
     var sun = DirectionalLight3D.new()
     sun.rotation_degrees = Vector3(-52, -32, 0)
     sun.light_color = Color("fff1cf")
-    sun.light_energy = 1.04
+    sun.light_energy = 0.73
     sun.shadow_enabled = true
     sun_light = sun
     add_child(sun)
@@ -266,7 +278,7 @@ func stone_piece(parent: Node3D, pos: Vector3, size: Vector3, angle: float = 0.0
     var block = BoxMesh.new()
     block.size = size
     part.mesh = block
-    part.material_override = deck_material()
+    part.material_override = palette_material("architecture",Color("73766f"),0.86,0.02)
     parent.add_child(part)
     part.position = pos
     part.rotation.z = angle
@@ -408,15 +420,35 @@ func deck_material() -> StandardMaterial3D:
     var key = "deck_"+str(stage_index)
     if not materials.has(key):
         var mat = StandardMaterial3D.new()
-        mat.albedo_color = Color(DECK_COLORS[stage_index])
+        mat.albedo_color = Color.WHITE
         mat.albedo_texture = art_texture("deck_%02d" % stage_index)
-        mat.roughness = 0.68
-        mat.metallic = 0.05
+        if mat.albedo_texture == null: mat.albedo_color = Color(DECK_COLORS[stage_index%12])
+        mat.normal_enabled = true
+        mat.normal_texture = art_texture("deck_normal_%02d" % stage_index)
+        mat.normal_scale = 0.62
+        mat.roughness = 0.78
+        mat.metallic = 0.04
         mat.uv1_triplanar = true
         mat.uv1_world_triplanar = true
-        mat.uv1_scale = Vector3.ONE*0.21
+        mat.uv1_scale = Vector3.ONE*0.24
         materials[key] = mat
     return materials[key]
+
+func deck_side() -> StandardMaterial3D:
+    return palette_material("deck_side_"+str(stage_index%12),Color(DECK_COLORS[stage_index%12]).darkened(0.26),0.84,0.08)
+
+func attach_mesh(parent: Node3D, shape: Mesh, pos: Vector3, mat: Material) -> MeshInstance3D:
+    var item = MeshInstance3D.new()
+    item.mesh = shape
+    item.material_override = mat
+    parent.add_child(item)
+    item.position = pos
+    return item
+
+func deck_box(parent: Node3D, size: Vector3, pos: Vector3, mat: Material) -> void:
+    var shape = BoxMesh.new()
+    shape.size = size
+    attach_mesh(parent,shape,pos,mat)
 
 func platform(pos: Vector3, size: Vector3, moving: bool = false) -> Node3D:
     var body: PhysicsBody3D
@@ -426,18 +458,47 @@ func platform(pos: Vector3, size: Vector3, moving: bool = false) -> Node3D:
         body = StaticBody3D.new()
     course.add_child(body)
     body.position = pos
-    # Visual deck and collision share exactly the same dimensions and top plane.
-    stone_piece(body,Vector3(0,-size.y*0.5,0),size)
-    collider(body, size, Vector3(0, -size.y/2, 0))
-    for side in [-1.0,1.0]:
-        var trim = MeshInstance3D.new()
-        var strip = BoxMesh.new()
-        strip.size = Vector3(0.13,0.15,size.z)
-        trim.mesh = strip
-        trim.material_override = palette_material("gold_trim",Color("b49346"),0.36,0.42)
-        body.add_child(trim)
-        trim.position = Vector3(side*(size.x*0.5-0.075),-0.075,0)
+    # Dark structural core, thinner inset textured wearing surface. Exact collider top.
+    deck_box(body,Vector3(size.x,size.y-0.12,size.z),Vector3(0,-(size.y+0.12)*0.5,0),deck_side())
+    deck_box(body,Vector3(size.x,0.12,size.z),Vector3(0,-0.06,0),deck_material())
+    collider(body,size,Vector3(0,-size.y*0.5,0))
     return body
+
+func round_deck(point: Vector3,radius: float,sides: int) -> void:
+    var body = StaticBody3D.new()
+    course.add_child(body)
+    body.position = point
+    # A polygonal convex collision hull matches the visible drum rather than an invisible box.
+    var mesh = CylinderMesh.new()
+    mesh.top_radius = radius
+    mesh.bottom_radius = radius
+    mesh.height = 0.18
+    mesh.radial_segments = sides
+    mesh.rings = 1
+    attach_mesh(body,mesh,Vector3(0,-0.09,0),deck_material())
+    var base = CylinderMesh.new()
+    base.top_radius = radius
+    base.bottom_radius = radius*0.87
+    base.height = 0.52
+    base.radial_segments = sides
+    base.rings = 1
+    attach_mesh(body,base,Vector3(0,-0.44,0),deck_side())
+    var hull = ConvexPolygonShape3D.new()
+    var vertices = PackedVector3Array()
+    for i in range(sides):
+        var angle = TAU*float(i)/float(sides)
+        vertices.append(Vector3(sin(angle)*radius,0,cos(angle)*radius))
+        vertices.append(Vector3(sin(angle)*radius,-0.7,cos(angle)*radius))
+    hull.points = vertices
+    var col = CollisionShape3D.new()
+    col.shape = hull
+    body.add_child(col)
+    var rim = TorusMesh.new()
+    rim.inner_radius = radius-0.12
+    rim.outer_radius = radius-0.04
+    rim.rings = 24
+    rim.ring_segments = 8
+    attach_mesh(body,rim,Vector3(0,-0.11,0),deck_side())
 
 func decoration(kind: String, pos: Vector3, size: Vector3) -> void:
     var n = Node3D.new()
@@ -482,6 +543,11 @@ func reset_course() -> void:
     if course != null:
         remove_child(course)
         course.queue_free()
+    # Do not hold every high-resolution course texture in memory.
+    for key in materials.keys():
+        if str(key).begins_with("deck_") and not str(key).begins_with("deck_side_"): materials.erase(key)
+    for key in material_textures.keys():
+        if str(key).begins_with("deck_"): material_textures.erase(key)
     course = Node3D.new()
     add_child(course)
     count = 0
@@ -509,6 +575,7 @@ func reset_course() -> void:
     brake.visible = true
     refresh_lives()
     build_route()
+    spawn = route_points[0]+Vector3(0,1.3,0)
     island_landscape()
     var end: Vector3 = route_points.back()
     var orb_indices = [1, int(route_points.size()/2), route_points.size()-2]
@@ -557,7 +624,7 @@ func reset_course() -> void:
     apply_skin()
     camera.position = spawn + Vector3(0,6.8,8.6)
     camera.look_at(spawn + Vector3(0,0,-3))
-    heading.text = STAGE_NAMES[lang][stage_index]
+    heading.text = "%02d · %s" % [stage_index+1,STAGE_NAMES[lang][stage_index]]
 
 # Imported environmental meshes remain visual only: the proven course
 # collision shapes are unchanged. No generated primitive scenery.
@@ -573,7 +640,7 @@ func make_hazard(pos: Vector3) -> AnimatableBody3D:
     return hazard
 
 func start_stage(index: int) -> void:
-    if index < 0 or index >= STAGE_END.size() or index > unlocked_stage: return
+    if index < 0 or index >= STAGE_COUNT or index > unlocked_stage: return
     stage_index = index
     reset_course()
     home_needs_reset = false
@@ -581,34 +648,68 @@ func start_stage(index: int) -> void:
 
 func connect_decks(a: Vector3,b: Vector3,width: float,rail: bool = false) -> PhysicsBody3D:
     var direction = b-a
-    var middle = (a+b)*0.5-Vector3(0,0.035,0)
+    var middle = (a+b)*0.5-Vector3(0,0.045,0)
     var length = direction.length()
     var body = platform(middle,Vector3(width,0.56,length),false) as PhysicsBody3D
     body.look_at(middle+direction,Vector3.UP)
-    if rail:
+    var theme = stage_index%12
+    var trim_mat = palette_material("trim_"+str(theme),Color(DECK_COLORS[theme]).lightened(0.26),0.55,0.20)
+    # Side bands stop before junctions; no overlapping coplanar strips.
+    var visible_length = maxf(0.0,length-5.6)
+    if visible_length>0.25:
         for side in [-1.0,1.0]:
-            var rp = Vector3(side*(width*0.5-0.15),0.16,0)
-            var rs = Vector3(0.18,0.32,maxf(0.3,length-3.8))
-            stone_piece(body,rp,rs)
-            collider(body,rs,rp)
+            deck_box(body,Vector3(0.10,0.08,visible_length),Vector3(side*(width*0.5-0.16),0.045,0),trim_mat)
+            if rail:
+                var rp = Vector3(side*(width*0.5-0.12),0.18,0)
+                var rs = Vector3(0.16,0.36,visible_length)
+                deck_box(body,rs,rp,deck_side())
+                collider(body,rs,rp)
+            if theme in [4,8,9]:
+                for j in range(int(visible_length/1.4)):
+                    var post = CylinderMesh.new()
+                    post.top_radius = 0.08
+                    post.bottom_radius = 0.11
+                    post.height = 0.58
+                    post.radial_segments = 8
+                    attach_mesh(body,post,Vector3(side*(width*0.5-0.18),-0.30,-visible_length*0.5+0.7+j*1.4),trim_mat)
+    # Small direction inlays are flush, not extra collision obstacles.
+    if length>6.0:
+        deck_box(body,Vector3(0.14,0.018,0.55),Vector3(0,0.012,0),trim_mat)
     return body
+
+func route_height(i: int) -> float:
+    var theme = stage_index%12
+    if theme in [2,5,10,11]:
+        return sin(float(i)*0.75)*0.55
+    if theme in [3,8] and stage_index>=12:
+        return float(i)*0.13
+    return 0.0
 
 func build_route() -> void:
     route_points.clear()
     stage_length = 0.0
-    for pair in ROUTES[stage_index]:
-        route_points.append(Vector3(float(pair[0]),0,float(pair[1])))
-    var width = 4.8 if stage_index == 0 else maxf(3.35,4.65-float(stage_index)*0.10)
+    var raw: Array = ROUTES[stage_index]
+    for i in range(raw.size()):
+        var pair: Array = raw[i]
+        route_points.append(Vector3(float(pair[0]),route_height(i),float(pair[1])))
+    var theme = stage_index%12
+    var width: float = [4.8,4.5,4.2,4.4,4.0,4.6,4.7,4.1,4.3,4.2,4.6,4.0][theme]
     for i in range(route_points.size()-1):
         var a: Vector3 = route_points[i]
         var b: Vector3 = route_points[i+1]
         stage_length += a.distance_to(b)
-        var segment = connect_decks(a,b,width,i%3==1)
+        var segment_width = float(width)
+        if theme in [4,7,9,11] and i%2==1: segment_width -= 0.35
+        var segment = connect_decks(a,b,segment_width,i%3==1)
         if i==2: bridge=segment
     for i in range(route_points.size()):
         var point: Vector3 = route_points[i]
-        var size = width+0.75 if i>0 and i<route_points.size()-1 else 6.0
-        platform(point,Vector3(size,0.65,size))
+        var size = float(width)+0.85 if i>0 and i<route_points.size()-1 else 6.0
+        if theme in [0,1,3,5,6,8,10,11]:
+            var sides = 24 if theme in [0,5,6,8,10] else (8 if theme in [1,11] else 12)
+            round_deck(point,size*0.5,sides)
+        else:
+            platform(point,Vector3(size,0.65,size))
     if stage_index >= 2:
         var anchor: Vector3 = route_points[1]
         var side = -1.0 if anchor.x<=0.0 else 1.0
@@ -632,39 +733,105 @@ func build_route() -> void:
                 write_save()
                 play_ui_sound()
                 bonus_area.queue_free())
+    # Side obstacles must stay clear of the route centre and adjacent turns.
     for i in range(2,route_points.size()-1,3):
-        if stage_index >= 3:
+        if stage_index>=3 and theme in [7,9,11]:
             var side = -1.0 if i%2==0 else 1.0
-            make_hazard(route_points[i]+Vector3(side*(width*0.5-0.15),0.42,0))
+            make_hazard(route_points[i]+Vector3(side*(float(width)*0.5-0.1),0.42,0))
     if is_instance_valid(sky_surface):
-        sky_surface.sky_top_color = Color(SKY_COLORS[stage_index])
-        sky_surface.sky_horizon_color = Color(SKY_COLORS[stage_index]).lerp(Color.WHITE,0.65)
+        sky_surface.sky_top_color = Color(SKY_COLORS[theme])
+        sky_surface.sky_horizon_color = Color(SKY_COLORS[theme]).lerp(Color.WHITE,0.38)
+
+func landmark_column(pos: Vector3,height: float,colour: Color) -> void:
+    var column = Node3D.new()
+    course.add_child(column)
+    column.position = pos
+    var mat = palette_material("column_"+colour.to_html(),colour,0.74,0.06)
+    var shaft = CylinderMesh.new()
+    shaft.top_radius = 0.29
+    shaft.bottom_radius = 0.42
+    shaft.height = height
+    shaft.radial_segments = 12
+    attach_mesh(column,shaft,Vector3(0,height*0.5,0),mat)
+    for y in [0.13,height-0.12]:
+        var cap = CylinderMesh.new()
+        cap.top_radius = 0.51
+        cap.bottom_radius = 0.51
+        cap.height = 0.24
+        cap.radial_segments = 12
+        attach_mesh(column,cap,Vector3(0,y,0),mat)
 
 func island_landscape() -> void:
+    var theme = stage_index%12
     for i in range(route_points.size()):
         var point: Vector3 = route_points[i]
         if i%2==0 or i==route_points.size()-1:
-            decoration("rock",point+Vector3(0,-2.9,0),Vector3(4.7,4.4,4.5))
+            decoration("rock",point+Vector3(0,-2.65,0),Vector3(4.9,4.1,4.7))
         if i==0 or i==route_points.size()-1: continue
         var side = -1.0 if i%2==0 else 1.0
-        var offset = point+Vector3(side*5.8,-2.5,0)
-        if stage_index in [0,1,6]:
-            decoration("rock",offset,Vector3(3.4,3.6,3.4))
-            decoration("forest_tree_alt",offset+Vector3(0,3.15,0),Vector3(1.65,2.6,1.65))
-            decoration("forest_bush",offset+Vector3(0.65,2.1,0.5),Vector3(0.8,0.6,0.8))
-        elif stage_index in [2,4,9,10]:
-            decoration("cliff",offset,Vector3(3.4,4.2,3.4))
-            ruin_arch(offset+Vector3(0,2.1,0),0.85 if stage_index==4 else 1.12)
-        elif stage_index in [3,5,7,11]:
-            decoration("rock",offset,Vector3(3.8,4.2,3.5))
-            crystal_cluster(offset+Vector3(0,2.0,0))
-            if i%2==1: crystal_cluster(offset+Vector3(0.9,2.1,0.7))
-        else:
-            decoration("cliff",offset,Vector3(3.4,4.4,3.5))
-            flowing_water(offset+Vector3(0,-1.0,1.65),1.7,5.4)
-    if stage_index in [4,8,10]:
-        var p: Vector3 = route_points[2]
-        decoration("bridge_wood",p+Vector3(7.8,-0.8,0),Vector3(2.6,0.9,4.0))
+        var offset = point+Vector3(side*6.5,-2.65,0)
+        # The twelve architectural families use deliberately different silhouettes.
+        match theme:
+            0:
+                decoration("cliff",offset,Vector3(3.4,4.5,3.4))
+                flowing_water(offset+Vector3(0,-0.8,1.7),1.5,5.0)
+            1:
+                decoration("rock",offset,Vector3(3.8,3.6,3.6))
+                decoration("forest_tree_alt",offset+Vector3(0,3.6,0),Vector3(2.2,3.6,2.2))
+                decoration("forest_bush",offset+Vector3(0.65,2.1,0.5),Vector3(0.9,0.7,0.9))
+            2:
+                decoration("cliff",offset,Vector3(3.9,4.3,3.9))
+                ruin_arch(offset+Vector3(0,2.25,0),1.2)
+            3:
+                decoration("rock",offset,Vector3(3.5,4.1,3.5))
+                crystal_cluster(offset+Vector3(0,2.1,0))
+                crystal_cluster(offset+Vector3(0.85,2.2,0.7))
+            4:
+                decoration("cliff",offset,Vector3(3.7,4.1,3.7))
+                decoration("bridge_wood",offset+Vector3(0,2.5,0),Vector3(2.6,0.9,3.3))
+                landmark_column(offset+Vector3(0,2.1,0),2.4,Color("755c43"))
+            5:
+                decoration("rock",offset,Vector3(3.9,4.3,3.9))
+                landmark_column(offset+Vector3(0,2.2,0),3.5,Color("97b0c3"))
+                crystal_cluster(offset+Vector3(0.9,2.2,0.7))
+            6:
+                decoration("rock",offset,Vector3(4.0,3.9,4.0))
+                decoration("forest_tree",offset+Vector3(0,3.6,0),Vector3(2.8,3.4,2.8))
+                decoration("flower",offset+Vector3(0.8,2.2,0.65),Vector3(0.7,0.6,0.7))
+            7:
+                decoration("cliff",offset,Vector3(3.8,4.4,3.8))
+                for k in range(3):
+                    landmark_column(offset+Vector3(float(k-1)*0.9,2.3,0),2.2+float(k)*0.6,Color("414853"))
+            8:
+                decoration("cliff",offset,Vector3(4.0,4.5,4.0))
+                flowing_water(offset+Vector3(0,-0.8,1.8),2.4,5.5)
+                flowing_water(offset+Vector3(1.1,-0.5,1.9),0.8,4.8)
+            9:
+                decoration("rock",offset,Vector3(3.8,4.0,3.8))
+                landmark_column(offset+Vector3(-0.8,2.1,0),2.5,Color("936744"))
+                landmark_column(offset+Vector3(0.8,2.1,0),3.0,Color("936744"))
+            10:
+                decoration("cliff",offset,Vector3(4.1,4.3,4.1))
+                ruin_arch(offset+Vector3(0,2.3,0),1.1)
+                landmark_column(offset+Vector3(1.35,2.3,0.7),3.3,Color("b9ad91"))
+            11:
+                decoration("rock",offset,Vector3(3.7,4.3,3.7))
+                var halo = TorusMesh.new()
+                halo.inner_radius = 0.86
+                halo.outer_radius = 1.05
+                var h = attach_mesh(course,halo,offset+Vector3(0,3.6,0),palette_material("halo",Color("9a83c7"),0.32,0.45))
+                h.rotation.x = PI*0.5
+                crystal_cluster(offset+Vector3(0,2.3,0))
+    # Walk-through tunnel arches on broad segments, visually separated from the deck.
+    if theme in [2,3,10]:
+        var a: Vector3 = route_points[2]
+        var b: Vector3 = route_points[3]
+        if a.distance_to(b)>6.2:
+            var arch_pos = (a+b)*0.5
+            var before: int = course.get_child_count()
+            ruin_arch(arch_pos,1.65)
+            var arch = course.get_child(before) as Node3D
+            arch.rotation.y = atan2(b.x-a.x,b.z-a.z)
 
 func _physics_process(delta: float) -> void:
     if not is_instance_valid(ball) or finished or menu_open:
@@ -709,7 +876,7 @@ func finish_course() -> void:
     var record: Dictionary = stage_records.get(str(stage_index),{})
     var previous_time = float(record.get("time",0.0))
     stage_records[str(stage_index)] = {"time":elapsed if previous_time<=0.0 else minf(previous_time,elapsed),"stars":maxi(stars,int(record.get("stars",0)))}
-    unlocked_stage = maxi(unlocked_stage,mini(stage_index+1,STAGE_END.size()-1))
+    unlocked_stage = maxi(unlocked_stage,mini(stage_index+1,STAGE_COUNT-1))
     coins += stars * 35
     earned_total += stars * 35
     victories += 1
@@ -748,7 +915,7 @@ func show_result() -> void:
     result.visible = true
     play_again.visible = true
     result_home.visible = true
-    next_stage_button.visible = won and stage_index < STAGE_END.size()-1
+    next_stage_button.visible = won and stage_index < STAGE_COUNT-1
     pad.visible = false
     brake.visible = false
     refresh_shop()
@@ -797,7 +964,7 @@ func read_save() -> void:
         var saved = str(cfg.get_value("settings","lang","en"))
         if WORDS.has(saved): lang = saved
         coins = maxi(0,int(cfg.get_value("progress","coins",0)))
-        unlocked_stage = clampi(int(cfg.get_value("progress","unlocked_stage",0)),0,STAGE_END.size()-1)
+        unlocked_stage = clampi(int(cfg.get_value("progress","unlocked_stage",0)),0,STAGE_COUNT-1)
         var saved_owned = cfg.get_value("progress","owned",[0])
         if not saved_owned is Array: saved_owned = [0]
         for id in saved_owned:
@@ -890,7 +1057,8 @@ func button(parent: Control, caption: String, rect: Rect2) -> Button:
     b.add_theme_constant_override("icon_max_width",35)
     b.add_theme_constant_override("h_separation",12)
     b.layout_direction = Control.LAYOUT_DIRECTION_LTR
-    b.expand_icon = true
+    b.expand_icon = false
+    b.add_theme_constant_override("icon_max_width",30)
     skin_button(b,"green")
     b.pressed.connect(play_ui_sound)
     return b
@@ -911,15 +1079,34 @@ func royal_style(key: String, round_button: bool = false) -> StyleBox:
             style.set_texture_margin(side, 42.0 if side == SIDE_LEFT or side == SIDE_RIGHT else 16.0)
     return style
 
+func button_surface(fill: Color,edge: Color,pressed: bool = false) -> StyleBoxFlat:
+    var style = StyleBoxFlat.new()
+    style.bg_color = fill
+    style.border_color = edge
+    style.set_border_width_all(2)
+    style.border_width_bottom = 3 if pressed else 5
+    style.set_corner_radius_all(18)
+    for side in [SIDE_LEFT,SIDE_TOP,SIDE_RIGHT,SIDE_BOTTOM]:
+        style.set_content_margin(side,11.0)
+    style.shadow_color = Color(0,0,0,0.34)
+    style.shadow_size = 3 if pressed else 5
+    style.shadow_offset = Vector2(0,2 if pressed else 4)
+    return style
+
 func skin_button(b: Button, theme_name: String, round_button: bool = false) -> void:
-    var key = "emerald" if theme_name == "green" else ("red" if theme_name == "red" else ("gold" if theme_name == "gold" else "stone"))
     if round_button:
-        key = "round"
         b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    b.add_theme_stylebox_override("normal",royal_style(key,round_button))
-    b.add_theme_stylebox_override("hover",royal_style(key,round_button))
-    b.add_theme_stylebox_override("pressed",royal_style(key if round_button else "pressed",round_button))
-    b.add_theme_stylebox_override("disabled",royal_style(key if round_button else "disabled",round_button))
+        b.add_theme_stylebox_override("normal",royal_style("round",true))
+        b.add_theme_stylebox_override("hover",royal_style("round",true))
+        b.add_theme_stylebox_override("pressed",royal_style("round",true))
+        b.add_theme_stylebox_override("disabled",royal_style("round",true))
+    else:
+        var fill = Color("254f4b") if theme_name=="green" else (Color("62483a") if theme_name=="gold" else (Color("67383d") if theme_name=="red" else Color("263940")))
+        var edge = Color("b99a60")
+        b.add_theme_stylebox_override("normal",button_surface(fill,edge))
+        b.add_theme_stylebox_override("hover",button_surface(fill.lightened(0.12),edge.lightened(0.12)))
+        b.add_theme_stylebox_override("pressed",button_surface(fill.darkened(0.18),edge,true))
+        b.add_theme_stylebox_override("disabled",button_surface(Color("343d42"),Color("627078")))
     b.add_theme_stylebox_override("focus",StyleBoxEmpty.new())
 
 func panel_style(bg: Color, line: Color, radius: int) -> StyleBoxFlat:
@@ -1119,7 +1306,7 @@ func make_ui() -> void:
         level.pressed.connect(func(): start_stage(level_page*6+i))
         level_buttons.append(level)
     action(levels,"levels_prev","back",func(): level_page=maxi(0,level_page-1); update_language(),"grey")
-    action(levels,"levels_next","play",func(): level_page=mini(1,level_page+1); update_language(),"gold")
+    action(levels,"levels_next","play",func(): level_page=mini(3,level_page+1); update_language(),"gold")
     action(levels,"levels_back","back",func(): show_screen("main"),"grey")
     var achievements = make_page("achievements")
     achievement_text = label(achievements,"",28,Rect2())
@@ -1167,9 +1354,9 @@ func layout_ui() -> void:
         place(life_icons[i],cx-18+i*45,161,38,38)
     place(restart,24,225,72,72)
     place(menu_button,w-96,225,72,72)
-    place(pad,28,h-278,232,232)
-    place(joystick_knob,77,77,78,78)
-    place(brake,w-190,h-202,160,160)
+    place(pad,30,h-260,224,224)
+    place(joystick_knob,73,73,78,78)
+    place(brake,w-254,h-260,224,224)
     place(result,24,h*0.35,w-48,185)
     place(next_stage_button,cx-210,h*0.35+190,420,80)
     place(play_again,cx-210,h*0.35+282,420,76)
@@ -1180,16 +1367,16 @@ func layout_ui() -> void:
     place(main_balance,bx,my+8,bw,44)
     place(menu_title,px+10,my+64,pw-20,174)
     place(menu_subtitle,px+12,my+240,pw-24,48)
-    var by = h*0.58
-    var bh = clampf((h-by-72)/4.3,56,108)
+    var by = h*0.54
+    var bh = clampf((h-by-68)/5.25,58,104)
     place(menu_play,bx,by,bw,bh)
     place(actions["levels"],bx,by+bh*1.08,bw,bh)
     place(actions["shop"],bx,by+bh*2.16,bw,bh)
-    place(actions["settings"],bx,by+bh*3.24,bw*0.49,bh)
-    place(actions["achievements"],bx+bw*0.51,by+bh*3.24,bw*0.49,bh)
-    place(menu_hint,bx,by+bh*4.24,bw,35)
-    actions["settings"].add_theme_font_size_override("font_size",22)
-    actions["achievements"].add_theme_font_size_override("font_size",21)
+    place(actions["settings"],bx,by+bh*3.24,bw,bh)
+    place(actions["achievements"],bx,by+bh*4.32,bw,bh)
+    place(menu_hint,bx,by+bh*5.32,bw,32)
+    actions["settings"].add_theme_font_size_override("font_size",32)
+    actions["achievements"].add_theme_font_size_override("font_size",30)
     menu_play.add_theme_font_size_override("font_size",42)
     actions["levels"].add_theme_font_size_override("font_size",33)
     actions["shop"].add_theme_font_size_override("font_size",33)
@@ -1322,7 +1509,7 @@ func refresh_shop() -> void:
     refresh_preview()
 
 func update_language() -> void:
-    heading.text = STAGE_NAMES[lang][stage_index]
+    heading.text = "%02d · %s" % [stage_index+1,STAGE_NAMES[lang][stage_index]]
     help.text = {"en":"Collect 3 orbs, reach the flag.","ar":"اجمع ٣ كرات ثم بلغ العلم.","pt":"Colete 3 orbes e alcance a bandeira."}[lang]
     restart.text = ""
     menu_button.text = ""
@@ -1365,11 +1552,11 @@ func update_language() -> void:
         level_button.text = "%02d  ·  %s  %s" % [idx+1,STAGE_NAMES[lang][idx],"★".repeat(stars)]
         level_button.disabled = idx > unlocked_stage
         level_button.icon = tex("lock" if idx > unlocked_stage else "play")
-    actions["levels_prev"].text = more(13)+"  1/2"
-    actions["levels_next"].text = more(12)+"  2/2"
+    actions["levels_prev"].text = more(13)
+    actions["levels_next"].text = more(12)
     actions["levels_prev"].disabled = level_page==0
-    actions["levels_next"].disabled = level_page==1
-    page_titles["levels"].text = more(0)+"  "+str(level_page+1)+"/2"
+    actions["levels_next"].disabled = level_page==3
+    page_titles["levels"].text = more(0)+"  "+str(level_page+1)+"/4"
     for control in ui_root.find_children("*","Control",true,false):
         if control is Label or control is Button:
             control.text_direction = Control.TEXT_DIRECTION_RTL if lang=="ar" else Control.TEXT_DIRECTION_LTR
@@ -1397,6 +1584,8 @@ func _input(event: InputEvent) -> void:
         elif not event.pressed and event.index == brake_touch:
             brake_touch = -1
             braking = false
+    if event is InputEventScreenDrag and event.index == touch_id and not menu_open and not finished:
+        move = ((event.position-pad.global_position-touch_start)*sensitivity/75.0).limit_length(1.0)
     if event is InputEventScreenTouch and not event.pressed and event.index == touch_id:
         touch_id = -1
         move = Vector2.ZERO
@@ -1453,7 +1642,7 @@ func refresh_achievements() -> void:
     var total_stars = 0
     for record in stage_records.values():
         total_stars += int(record.get("stars",0))
-    achievement_text.text = "%s: %d/12\n\n★ %d/36\n\n%s: %.1fs\n\n%s: %d" % [more(9),stage_records.size(),total_stars,more(10),best,more(16),earned_total]
+    achievement_text.text = "%s: %d/24\n\n★ %d/72\n\n%s: %.1fs\n\n%s: %d" % [more(9),stage_records.size(),total_stars,more(10),best,more(16),earned_total]
 
 func setup_preview() -> void:
     var root = Node3D.new()

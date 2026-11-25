@@ -167,7 +167,7 @@ func run() -> void:
         return
     # Real physics traversal from spawn through all mandatory pickups and the final gate,
     # on every course; do not manually invoke finish_course for this regression.
-    for stage in range(12):
+    for stage in range(24):
         scene.start_stage(stage)
         await process_frame
         if scene.route_points.size()<6 or scene.stage_index!=stage:
@@ -175,7 +175,7 @@ func run() -> void:
             quit(1)
             return
         var waypoint = 1
-        for tick in range(3600):
+        for tick in range(4800):
             await physics_frame
             if scene.finished: break
             var target: Vector3 = scene.route_points[waypoint]
@@ -191,12 +191,12 @@ func run() -> void:
             push_error("Full route failed stage %d at %s waypoint %d pickups %d falls %d" % [stage+1,str(scene.ball.position),waypoint,scene.count,scene.falls])
             quit(1)
             return
-        if scene.art_texture("deck_%02d" % stage)==null:
+        if scene.art_texture("deck_%02d" % stage)==null or scene.art_texture("deck_normal_%02d" % stage)==null:
             push_error("Missing distinct deck artwork "+str(stage))
             quit(1)
             return
         print("FULL_COURSE_OK ",stage+1)
-    if scene.stage_records.size()!=12:
+    if scene.stage_records.size()!=24:
         push_error("Stage records missing")
         quit(1)
         return

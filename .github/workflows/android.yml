@@ -8,7 +8,7 @@ permissions:
 jobs:
   prototype:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 55
     env:
       GODOT_VERSION: 4.6.3
     steps:
@@ -47,16 +47,18 @@ jobs:
       - name: Fetch licensed original assets
         run: python3 tools/fetch_assets.py
       - name: Generate original HD material artwork
-        run: python3 tools/generate_materials.py
+        run: |
+          python3 -m pip install numpy==2.2.6 Pillow==11.3.0
+          python3 tools/generate_materials.py
       - name: Import assets
         run: godot --headless --path . --editor --import > import.log 2>&1 || (cat import.log; exit 1)
       - name: Smoke test
         run: |
           set -euo pipefail
           export XDG_DATA_HOME="$RUNNER_TEMP/godot-smoke-data"
-          timeout 480 godot --headless --path . --script tools/smoke.gd 2>&1 | tee smoke.log
+          timeout 1100 godot --headless --path . --script tools/smoke.gd 2>&1 | tee smoke.log
           grep -q SMOKE_OK smoke.log
-          test "$(grep -c FULL_COURSE_OK smoke.log)" -eq 12
+          test "$(grep -c FULL_COURSE_OK smoke.log)" -eq 24
           if grep -E 'SCRIPT ERROR|Parse Error' import.log smoke.log; then exit 1; fi
       - name: Export and sign prototype
         env:
@@ -82,7 +84,7 @@ jobs:
           mkdir -p build
           godot --headless --path . --export-release Android build/unsigned.apk
           test -s build/unsigned.apk
-          test "$(stat -c%s build/unsigned.apk)" -gt 59000000
+          test "$(stat -c%s build/unsigned.apk)" -gt 81105297
           bt="$ANDROID_HOME/build-tools/35.0.1"
           "$bt/zipalign" -P 16 -f 4 build/unsigned.apk "$RUNNER_TEMP/aligned.apk"
           "$bt/apksigner" sign --ks "$ks" --ks-key-alias "$KEY_ALIAS" --ks-pass env:KS_PASS --key-pass env:KEY_PASS --out build/MarbleQuest3D-prototype.apk "$RUNNER_TEMP/aligned.apk"

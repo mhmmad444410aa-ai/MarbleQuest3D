@@ -13,3 +13,5 @@ Royal UI (1.2.0): original SVG artwork authored for this project, inspired by th
 1.3.0: approved original emerald/gold icon, optimised 96px WebP for launcher; three real courses with locked progression; unified collision/visual deck, guard rails, off-centre moving obstacles, and real physics tests for all pickups and finish gates. Extra original 2K gold, moss and crystal texture maps and upgraded stone/normal maps, applied to visible geometry. Store artwork is separately retained at 512px.
 
 1.4.0: twelve independent route layouts, original low-contrast 2K architectural surfaces per course, stage-specific scenery, goal rings, optional reward terraces, stage records and paginated course selection. Royal controls and icon retained. No package padding.
+
+1.5.0: 24 courses and 12 architectural families, convex polygon/circular platforms with matching collision, gently sloped courses, side bands with shortened overlap-free trim, original dark albedo and normal surfaces (48 used 2K maps), coherent full-width menu controls and four level pages. Original launcher and royal touch controls retained. No artificial padding.
