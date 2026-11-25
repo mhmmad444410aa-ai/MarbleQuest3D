@@ -46,5 +46,50 @@ func run() -> void:
     if scene.count != 0 or scene.finished or not is_instance_valid(scene.ball):
         quit(1)
         return
+    if scene.lives != 3 or scene.tex("pause") == null or scene.tex("green_rect") == null:
+        push_error("Smoke: attempts or real UI sprites missing")
+        quit(1)
+        return
+    scene.show_screen("pause")
+    if not scene.menu_open or not scene.ball.freeze or not scene.pages["pause"].visible:
+        quit(1)
+        return
+    scene.show_screen("settings")
+    if not scene.pages["settings"].visible or scene.pages["pause"].visible:
+        quit(1)
+        return
+    scene.show_screen("shop")
+    if not scene.pages["shop"].visible or scene.shop_buttons.size()!=4:
+        quit(1)
+        return
+    scene.coins = 200
+    scene.buy_or_equip(1)
+    if scene.coins != 140 or not scene.owned.has(1) or scene.equipped != 1:
+        quit(1)
+        return
+    scene.buy_or_equip(1)
+    if scene.coins != 140:
+        quit(1)
+        return
+    scene.show_screen("play")
+    for i in range(3):
+        scene.lose_attempt()
+        await process_frame
+        if scene.lives != 2-i:
+            quit(1)
+            return
+    if not scene.finished or scene.won or not scene.result.visible:
+        quit(1)
+        return
+    scene.reset_course()
+    if scene.lives != 3 or scene.finished:
+        quit(1)
+        return
+    scene.finish_course()
+    var awarded = scene.coins
+    scene.finish_course()
+    if not scene.won or awarded != 245 or scene.coins != awarded:
+        quit(1)
+        return
     print("SMOKE_OK")
     quit(0)

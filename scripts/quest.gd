@@ -49,6 +49,39 @@ var hud_panel: Panel
 var menu_panel: Panel
 var language_buttons: Array[Button] = []
 var materials: Dictionary = {}
+var lives = 3
+var coins = 0
+var owned: Array[int] = [0]
+var equipped = 0
+var quality = 1
+var sun_light: DirectionalLight3D
+var vibration = false
+var won = false
+var screen = "main"
+var settings_return = "main"
+var home_needs_reset = false
+var pages: Dictionary = {}
+var page_panels: Dictionary = {}
+var page_titles: Dictionary = {}
+var actions: Dictionary = {}
+var shop_buttons: Array[Button] = []
+var shop_labels: Array[Label] = []
+var shop_swatches: Array[TextureRect] = []
+var life_icons: Array[TextureRect] = []
+var life_label: Label
+var balance_label: Label
+var main_balance: Label
+var result_home: Button
+var quality_button: Button
+var vibration_button: Button
+var ui_textures: Dictionary = {}
+const PRICES = [0,60,120,200]
+const SKINS = [Color("287c88"),Color("ce983b"),Color("885ac7"),Color("e1e7ef")]
+const UI_WORDS = {
+    "en": ["PLAY","MARBLE SHOP","SETTINGS","PAUSED","RESUME","MAIN MENU","BACK","ATTEMPTS","OUT OF ATTEMPTS","TRY AGAIN","POINTS","EQUIP","EQUIPPED","UNLOCK","NOT ENOUGH POINTS","GRAPHICS","LOW","MEDIUM","HIGH","VIBRATION","ON","OFF","LANGUAGE","Jade","Amber","Amethyst","Pearl","Earn points by completing a course.","SKY CROSSING","BRAKE","RESTART"],
+    "ar": ["ابدأ اللعب","متجر الكرات","الإعدادات","توقف مؤقت","متابعة","القائمة الرئيسية","رجوع","المحاولات","نفدت المحاولات","حاول مجدداً","النقاط","اختيار","مجهزة","فتح","النقاط غير كافية","الرسومات","منخفضة","متوسطة","عالية","الاهتزاز","تشغيل","إيقاف","اللغة","اليشم","الكهرمان","الجمشت","اللؤلؤ","اكسب النقاط بإكمال المرحلة.","عبور السماء","فرامل","إعادة"],
+    "pt": ["JOGAR","LOJA DE BOLAS","CONFIGURAÇÕES","PAUSADO","CONTINUAR","MENU PRINCIPAL","VOLTAR","TENTATIVAS","SEM TENTATIVAS","TENTAR NOVAMENTE","PONTOS","EQUIPAR","EQUIPADA","DESBLOQUEAR","PONTOS INSUFICIENTES","GRÁFICOS","BAIXA","MÉDIA","ALTA","VIBRAÇÃO","LIGADA","DESLIGADA","IDIOMA","Jade","Âmbar","Ametista","Pérola","Ganhe pontos ao concluir a fase.","TRAVESSIA CELESTE","FREIO","REINICIAR"]
+}
 const EXTRA = {
     "en": ["Play", "Sky Crossing", "A floating-island expedition", "Menu", "Choose your language"],
     "ar": ["ابدأ", "عبور السماء", "مغامرة بين الجزر العائمة", "القائمة", "اختر لغتك"],
@@ -103,7 +136,9 @@ func make_environment() -> void:
     sun.light_color = Color("fff1cf")
     sun.light_energy = 0.72
     sun.shadow_enabled = true
+    sun_light = sun
     add_child(sun)
+    apply_quality()
     camera = Camera3D.new()
     camera.fov = 58
     camera.current = true
@@ -227,6 +262,8 @@ func reset_course() -> void:
     add_child(course)
     count = 0
     falls = 0
+    lives = 3
+    won = false
     elapsed = 0
     clock = 0
     finished = false
@@ -237,6 +274,10 @@ func reset_course() -> void:
     orbs.clear()
     result.visible = false
     play_again.visible = false
+    result_home.visible = false
+    pad.visible = true
+    brake.visible = true
+    refresh_lives()
     platform(Vector3(0,0,0),Vector3(5,0.65,6))
     platform(Vector3(0,0,-5),Vector3(2.8,0.6,4))
     platform(Vector3(0,0,-9),Vector3(6,0.7,4))
@@ -284,6 +325,7 @@ func reset_course() -> void:
     col.shape = sphere
     ball.add_child(col)
     model("ball",ball,Vector3.ONE * 0.76)
+    apply_skin()
     camera.position = spawn + Vector3(0,8,8)
     camera.look_at(spawn + Vector3(0,0,-3))
 
@@ -342,33 +384,85 @@ func _physics_process(delta: float) -> void:
     ball.linear_damp = 5.0 if braking else (1.6 if axis.length() < 0.08 else 0.45)
     ball.angular_damp = 4.0 if braking else 0.4
     if ball.position.y < -5:
-        falls += 1
-        ball.linear_velocity = Vector3.ZERO
-        ball.angular_velocity = Vector3.ZERO
-        ball.position = spawn
-        ball.reset_physics_interpolation()
+        lose_attempt()
+        if finished: return
     camera.position = camera.position.lerp(ball.position + Vector3(0,8,8),1.0-exp(-delta*5.0))
     camera.look_at(camera.position + Vector3(0,-8,-11))
     for a in orbs:
         if is_instance_valid(a):
             a.rotate_y(delta*1.6)
-    stats.text = "%s %d/3  •  %s %d  •  %s %ds" % [tr_word(3),count,tr_word(4),falls,tr_word(5),int(elapsed)]
+    stats.text = "%s %d/3   •   %s %ds" % [tr_word(3),count,tr_word(5),int(elapsed)]
     if is_instance_valid(joystick_knob):
         joystick_knob.position = (pad.size - joystick_knob.size) * 0.5 + move * 54.0
     if gate.overlaps_body(ball) and count == 3:
         finish_course()
 
 func finish_course() -> void:
+    if finished: return
     finished = true
+    won = true
     ball.set_deferred("freeze", true)
     move = Vector2.ZERO
-    var stars = 3 if falls == 0 else (2 if falls <= 2 else 1)
+    var stars = lives
+    coins += stars * 35
     if best == 0 or elapsed < best:
         best = elapsed
     write_save()
     result.text = "%s\n%s\n%s %.1fs" % [tr_word(8),"★".repeat(stars)+"☆".repeat(3-stars),tr_word(12),best]
+    show_result()
+
+func lose_attempt() -> void:
+    if finished: return
+    falls += 1
+    lives = maxi(0,lives-1)
+    refresh_lives()
+    move = Vector2.ZERO
+    touch_id = -1
+    braking = false
+    if vibration and OS.has_feature("mobile"):
+        Input.vibrate_handheld(100)
+    ball.linear_velocity = Vector3.ZERO
+    ball.angular_velocity = Vector3.ZERO
+    if lives == 0:
+        finished = true
+        won = false
+        ball.set_deferred("freeze",true)
+        result.text = word(8)
+        show_result()
+    else:
+        ball.position = spawn
+        ball.reset_physics_interpolation()
+
+func show_result() -> void:
     result.visible = true
     play_again.visible = true
+    result_home.visible = true
+    pad.visible = false
+    brake.visible = false
+    refresh_shop()
+
+func apply_skin() -> void:
+    if not is_instance_valid(ball): return
+    var mat = palette_material("skin_"+str(equipped),SKINS[equipped],0.19,0.38)
+    for part in ball.find_children("*","MeshInstance3D",true,false):
+        part.material_override = mat
+
+func buy_or_equip(index: int) -> void:
+    if index < 0 or index >= PRICES.size(): return
+    if not owned.has(index):
+        if coins < PRICES[index]: return
+        coins -= PRICES[index]
+        owned.append(index)
+    equipped = index
+    apply_skin()
+    write_save()
+    refresh_shop()
+
+func apply_quality() -> void:
+    if is_instance_valid(sun_light):
+        sun_light.shadow_enabled = quality > 0
+        sun_light.directional_shadow_max_distance = 24.0 if quality == 1 else 48.0
+    get_viewport().scaling_3d_scale = [0.75,0.9,1.0][quality]
 
 func read_save() -> void:
     var cfg = ConfigFile.new()
@@ -376,11 +470,24 @@ func read_save() -> void:
         best = float(cfg.get_value("progress","best",0.0))
         var saved = str(cfg.get_value("settings","lang","en"))
         if WORDS.has(saved): lang = saved
+        coins = maxi(0,int(cfg.get_value("progress","coins",0)))
+        for id in cfg.get_value("progress","owned",[0]):
+            if int(id) >= 0 and int(id) < PRICES.size() and not owned.has(int(id)):
+                owned.append(int(id))
+        equipped = int(cfg.get_value("progress","equipped",0))
+        if not owned.has(equipped): equipped = 0
+        quality = clampi(int(cfg.get_value("settings","quality",1)),0,2)
+        vibration = bool(cfg.get_value("settings","vibration",false))
 
 func write_save() -> void:
     var cfg = ConfigFile.new()
     cfg.set_value("progress","best",best)
     cfg.set_value("settings","lang",lang)
+    cfg.set_value("progress","coins",coins)
+    cfg.set_value("progress","owned",owned)
+    cfg.set_value("progress","equipped",equipped)
+    cfg.set_value("settings","quality",quality)
+    cfg.set_value("settings","vibration",vibration)
     cfg.save(SAVE)
 
 func label(parent: Control, text_value: String, font_size: int, rect: Rect2) -> Label:
@@ -398,25 +505,53 @@ func label(parent: Control, text_value: String, font_size: int, rect: Rect2) -> 
     l.mouse_filter = Control.MOUSE_FILTER_IGNORE
     return l
 
+func word(index: int) -> String:
+    return UI_WORDS[lang][index]
+
+func tex(key: String) -> Texture2D:
+    if not ui_textures.has(key):
+        var path = "res://assets/ui/" + key + ".png"
+        if ResourceLoader.exists(path):
+            ui_textures[key] = load(path)
+    return ui_textures.get(key) as Texture2D
+
+func texture_style(key: String, round_button: bool = false) -> StyleBox:
+    var image = tex(key)
+    if image == null:
+        return panel_style(Color("245d60"),Color("c1ac78"),22)
+    var style = StyleBoxTexture.new()
+    style.texture = image
+    if not round_button:
+        var edge = minf(16.0,minf(image.get_width(),image.get_height())/4.0)
+        for side in [SIDE_LEFT,SIDE_TOP,SIDE_RIGHT,SIDE_BOTTOM]:
+            style.set_texture_margin(side,edge)
+            style.set_content_margin(side,10.0)
+    return style
+
 func button(parent: Control, caption: String, rect: Rect2) -> Button:
     var b = Button.new()
     parent.add_child(b)
     b.position = rect.position
     b.size = rect.size
     b.text = caption
-    b.add_theme_font_size_override("font_size",23)
-    var style = StyleBoxFlat.new()
-    style.bg_color = Color("183c40")
-    style.border_color = Color("c1ac78")
-    style.set_border_width_all(2)
-    style.set_corner_radius_all(18)
-    b.add_theme_stylebox_override("normal",style)
-    var pressed_style = style.duplicate()
-    pressed_style.bg_color = Color("356a75")
-    b.add_theme_stylebox_override("pressed",pressed_style)
-    b.add_theme_stylebox_override("hover",pressed_style)
+    b.add_theme_font_size_override("font_size",26)
+    b.add_theme_color_override("font_color",Color.WHITE)
+    b.add_theme_color_override("font_hover_color",Color.WHITE)
+    b.add_theme_color_override("font_pressed_color",Color.WHITE)
+    b.add_theme_color_override("font_disabled_color",Color("d1dad6"))
+    b.add_theme_constant_override("icon_max_width",35)
+    b.add_theme_constant_override("h_separation",12)
     b.layout_direction = Control.LAYOUT_DIRECTION_LTR
+    skin_button(b,"green")
     return b
+
+func skin_button(b: Button, theme_name: String, round_button: bool = false) -> void:
+    var name = theme_name + ("_round" if round_button else "_rect")
+    b.add_theme_stylebox_override("normal",texture_style(name,round_button))
+    b.add_theme_stylebox_override("hover",texture_style(name,round_button))
+    b.add_theme_stylebox_override("pressed",texture_style("grey"+("_round" if round_button else "_rect"),round_button))
+    b.add_theme_stylebox_override("disabled",texture_style("grey"+("_round" if round_button else "_rect"),round_button))
+    b.add_theme_stylebox_override("focus",StyleBoxEmpty.new())
 
 func panel_style(bg: Color, line: Color, radius: int) -> StyleBoxFlat:
     var style = StyleBoxFlat.new()
@@ -424,7 +559,34 @@ func panel_style(bg: Color, line: Color, radius: int) -> StyleBoxFlat:
     style.border_color = line
     style.set_border_width_all(2)
     style.set_corner_radius_all(radius)
+    style.shadow_color = Color(0.02,0.08,0.09,0.35)
+    style.shadow_size = 6
+    style.shadow_offset = Vector2(0,4)
     return style
+
+func make_page(key: String) -> Control:
+    var page = Control.new()
+    ui_root.add_child(page)
+    page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    page.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    var panel = Panel.new()
+    page.add_child(panel)
+    panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    panel.add_theme_stylebox_override("panel",panel_style(Color(0.045,0.12,0.14,0.96),Color("bca778"),30))
+    pages[key] = page
+    page_panels[key] = panel
+    var title = label(page,"",38,Rect2())
+    title.add_theme_color_override("font_color",Color("ffe4ae"))
+    page_titles[key] = title
+    return page
+
+func action(parent: Control, key: String, icon_name: String, callback: Callable, colour: String = "green") -> Button:
+    var b = button(parent,"",Rect2())
+    b.icon = tex(icon_name)
+    skin_button(b,colour)
+    b.pressed.connect(callback)
+    actions[key] = b
+    return b
 
 func make_ui() -> void:
     var layer = CanvasLayer.new()
@@ -441,65 +603,124 @@ func make_ui() -> void:
     hud_panel = Panel.new()
     hud.add_child(hud_panel)
     hud_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    hud_panel.add_theme_stylebox_override("panel",panel_style(Color(0.06,0.15,0.17,0.89),Color("c1ac78"),22))
-    heading = label(hud,"",34,Rect2())
-    help = label(hud,"",24,Rect2())
-    stats = label(hud,"",28,Rect2())
-    help.add_theme_color_override("font_color",Color("b5d3cd"))
+    hud_panel.add_theme_stylebox_override("panel",panel_style(Color(0.06,0.15,0.17,0.89),Color("c1ac78"),24))
+    heading = label(hud,"",32,Rect2())
+    help = label(hud,"",22,Rect2())
+    stats = label(hud,"",26,Rect2())
+    life_label = label(hud,"",22,Rect2())
     heading.add_theme_color_override("font_color",Color("ffe4ae"))
+    for i in range(3):
+        var dot = TextureRect.new()
+        hud.add_child(dot)
+        dot.texture = tex("green_round")
+        dot.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+        dot.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+        dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        life_icons.append(dot)
     restart = button(hud,"",Rect2())
+    restart.icon = tex("repeat")
+    skin_button(restart,"grey",true)
     restart.pressed.connect(func():
         if is_instance_valid(ball): reset_course())
     menu_button = button(hud,"",Rect2())
-    menu_button.pressed.connect(func(): set_menu(true))
+    menu_button.icon = tex("pause")
+    skin_button(menu_button,"green",true)
+    menu_button.pressed.connect(func(): show_screen("pause"))
     pad = Panel.new()
     hud.add_child(pad)
-    pad.add_theme_stylebox_override("panel",panel_style(Color(0.06,0.18,0.2,0.68),Color("d5c392"),125))
+    pad.add_theme_stylebox_override("panel",texture_style("grey_round",true))
+    pad.modulate = Color(0.76,0.92,0.92,0.80)
     joystick_knob = Panel.new()
     pad.add_child(joystick_knob)
     joystick_knob.mouse_filter = Control.MOUSE_FILTER_IGNORE
     joystick_knob.size = Vector2(78,78)
-    joystick_knob.add_theme_stylebox_override("panel",panel_style(Color("d5c392"),Color("fff1c9"),39))
+    joystick_knob.add_theme_stylebox_override("panel",texture_style("green_round",true))
     pad.gui_input.connect(pad_input)
     brake = button(hud,"",Rect2())
+    brake.icon = tex("stop")
+    skin_button(brake,"red",true)
     brake.button_down.connect(func(): braking = true)
     brake.button_up.connect(func(): braking = false)
-    result = label(hud,"",40,Rect2())
+    result = label(hud,"",36,Rect2())
     result.max_lines_visible = 3
     result.add_theme_color_override("font_color",Color("ffe198"))
     result.add_theme_color_override("font_outline_color",Color("173b4b"))
     result.add_theme_constant_override("outline_size",8)
     result.visible = false
-    play_again = button(hud,"",Rect2())
+    play_again = action(hud,"retry","repeat",func(): reset_course())
     play_again.visible = false
-    play_again.pressed.connect(func(): reset_course())
-    menu = Control.new()
-    ui_root.add_child(menu)
-    menu.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    menu.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    menu_panel = Panel.new()
-    menu.add_child(menu_panel)
-    menu_panel.add_theme_stylebox_override("panel",panel_style(Color(0.06,0.14,0.16,0.94),Color("c1ac78"),32))
-    menu_title = label(menu,"",38,Rect2())
-    menu_title.add_theme_color_override("font_color",Color("ffe4ae"))
-    menu_subtitle = label(menu,"",29,Rect2())
-    menu_hint = label(menu,"",25,Rect2())
-    menu_play = button(menu,"",Rect2())
-    menu_play.add_theme_font_size_override("font_size",32)
-    menu_play.pressed.connect(func():
-        if is_instance_valid(ball): set_menu(false))
+    result_home = action(hud,"result_home","home",func(): go_home(),"grey")
+    result_home.visible = false
+
+    menu = make_page("main")
+    menu_panel = page_panels["main"]
+    menu_title = page_titles["main"]
+    menu_subtitle = label(menu,"",28,Rect2())
+    menu_hint = label(menu,"",20,Rect2())
+    main_balance = label(menu,"",25,Rect2())
+    menu_play = action(menu,"play","play",func():
+        if is_instance_valid(ball):
+            if home_needs_reset or finished: reset_course()
+            home_needs_reset = false
+            show_screen("play"))
+    action(menu,"shop","shop",func(): show_screen("shop"),"grey")
+    action(menu,"settings","gear",func():
+        settings_return = "main"
+        show_screen("settings"),"grey")
+
+    var store = make_page("shop")
+    balance_label = label(store,"",29,Rect2())
+    for i in range(PRICES.size()):
+        var swatch = TextureRect.new()
+        store.add_child(swatch)
+        swatch.texture = tex("white_round")
+        swatch.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+        swatch.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+        swatch.modulate = SKINS[i]
+        swatch.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        shop_swatches.append(swatch)
+        var item = label(store,"",27,Rect2())
+        shop_labels.append(item)
+        var purchase = button(store,"",Rect2())
+        purchase.pressed.connect(func(): buy_or_equip(i))
+        shop_buttons.append(purchase)
+    action(store,"shop_back","back",func(): show_screen("main"),"grey")
+
+    var settings = make_page("settings")
+    actions["language_title"] = button(settings,"",Rect2())
+    actions["language_title"].disabled = true
     for i in range(3):
         var code = ["en","ar","pt"][i]
-        var b = button(menu,["EN","العربية","PT-BR"][i],Rect2())
+        var b = button(settings,["EN","العربية","PT-BR"][i],Rect2())
         language_buttons.append(b)
         b.pressed.connect(func():
             lang = code
             update_language()
             write_save())
+    quality_button = action(settings,"quality","gear",func():
+        quality = (quality+1)%3
+        apply_quality()
+        update_language()
+        write_save(),"grey")
+    vibration_button = action(settings,"vibration","gamepad",func():
+        vibration = not vibration
+        update_language()
+        write_save(),"grey")
+    action(settings,"settings_back","back",func(): show_screen(settings_return),"grey")
+
+    var paused = make_page("pause")
+    action(paused,"resume","play",func(): show_screen("play"))
+    action(paused,"pause_restart","repeat",func():
+        reset_course()
+        show_screen("play"),"grey")
+    action(paused,"pause_settings","gear",func():
+        settings_return = "pause"
+        show_screen("settings"),"grey")
+    action(paused,"pause_home","home",func(): go_home(),"grey")
     ui_root.resized.connect(layout_ui)
     update_language()
     layout_ui()
-    set_menu(true)
+    show_screen("main")
 
 func place(c: Control, x: float, y: float, w: float, h: float) -> void:
     c.position = Vector2(x,y)
@@ -510,54 +731,143 @@ func layout_ui() -> void:
     var w = ui_root.size.x
     var h = ui_root.size.y
     if w < 320 or h < 500: return
-    var cx = w * 0.5
-    var pw = minf(w-36,680)
-    place(hud_panel,18,20,w-36,176)
-    place(heading,32,27,w-64,52)
-    place(stats,32,82,w-64,49)
-    place(help,32,134,w-64,48)
-    place(restart,20,208,164,66)
-    place(menu_button,w-184,208,164,66)
+    var cx = w*0.5
+    var pw = minf(w-40,620)
+    var px = cx-pw*0.5
+    var bw = pw-48
+    var bx = px+24
+    place(hud_panel,18,20,w-36,190)
+    place(heading,30,26,w-60,48)
+    place(stats,30,78,w-60,40)
+    place(help,30,122,w-60,36)
+    place(life_label,cx-180,165,155,32)
+    for i in range(3):
+        place(life_icons[i],cx-18+i*45,161,38,38)
+    place(restart,24,225,72,72)
+    place(menu_button,w-96,225,72,72)
     place(pad,28,h-278,232,232)
     place(joystick_knob,77,77,78,78)
-    place(brake,w-204,h-185,176,130)
-    place(result,24,h*0.38,w-48,190)
-    place(play_again,cx-160,h*0.38+200,320,76)
-    var y = minf(h*0.37,h-460)
-    place(menu_panel,cx-pw*0.5,y,pw,420)
-    place(menu_title,cx-pw*0.5+16,y+22,pw-32,104)
-    place(menu_subtitle,cx-pw*0.5+16,y+132,pw-32,64)
-    place(menu_play,cx-pw*0.5+32,y+209,pw-64,86)
-    place(menu_hint,cx-pw*0.5+16,y+308,pw-32,38)
-    var bw = (pw-76)/3.0
-    for i in range(language_buttons.size()):
-        place(language_buttons[i],cx-pw*0.5+24+i*(bw+14),y+352,bw,48)
+    place(brake,w-190,h-202,160,160)
+    place(result,24,h*0.35,w-48,185)
+    place(play_again,cx-160,h*0.35+190,320,80)
+    place(result_home,cx-160,h*0.35+282,320,74)
+    var mh = 560.0
+    var my = clampf(h*0.32,24,h-mh-24)
+    place(menu_panel,px,my,pw,mh)
+    place(menu_title,px+12,my+20,pw-24,70)
+    place(menu_subtitle,px+16,my+92,pw-32,50)
+    place(main_balance,bx,my+144,bw,45)
+    place(menu_play,bx,my+205,bw,100)
+    place(actions["shop"],bx,my+320,bw,82)
+    place(actions["settings"],bx,my+416,bw,82)
+    place(menu_hint,bx,my+510,bw,36)
 
-func set_menu(open: bool) -> void:
-    menu_open = open
-    hud.visible = not open
-    menu.visible = open
+    var sh = 690.0
+    var sy = maxf(20,(h-sh)*0.5)
+    place(page_panels["shop"],px,sy,pw,sh)
+    place(page_titles["shop"],px+10,sy+15,pw-20,60)
+    place(balance_label,bx,sy+78,bw,48)
+    for i in range(PRICES.size()):
+        var row_y = sy+137+i*115
+        place(shop_swatches[i],bx,row_y+11,74,74)
+        place(shop_labels[i],bx+78,row_y+10,bw*0.42,70)
+        place(shop_buttons[i],px+pw*0.55,row_y+5,pw*0.40,82)
+    place(actions["shop_back"],bx,sy+603,bw,65)
+
+    var dh = 520.0
+    var dy = maxf(20,(h-dh)*0.5)
+    place(page_panels["settings"],px,dy,pw,dh)
+    place(page_titles["settings"],px+10,dy+15,pw-20,68)
+    place(actions["language_title"],bx,dy+94,bw,54)
+    var lw = (bw-24)/3.0
+    for i in range(3):
+        place(language_buttons[i],bx+i*(lw+12),dy+158,lw,70)
+    place(quality_button,bx,dy+250,bw,74)
+    place(vibration_button,bx,dy+338,bw,74)
+    place(actions["settings_back"],bx,dy+430,bw,66)
+
+    var ph = 520.0
+    var py = maxf(20,(h-ph)*0.5)
+    place(page_panels["pause"],px,py,pw,ph)
+    place(page_titles["pause"],px+10,py+18,pw-20,72)
+    for i in range(4):
+        place(actions[["resume","pause_restart","pause_settings","pause_home"][i]],bx,py+110+i*96,bw,80)
+
+func show_screen(next: String) -> void:
+    screen = next
+    menu_open = next != "play"
+    hud.visible = next == "play"
+    for key in pages:
+        pages[key].visible = next == key
     move = Vector2.ZERO
     touch_id = -1
     braking = false
     if is_instance_valid(ball):
-        ball.freeze = open or finished
+        ball.freeze = menu_open or finished
+    if next == "shop" or next == "main": refresh_shop()
+    if next == "settings": update_language()
+
+func go_home() -> void:
+    home_needs_reset = true
+    show_screen("main")
+
+func set_menu(open: bool) -> void:
+    show_screen("main" if open else "play")
+
+func refresh_lives() -> void:
+    if not is_instance_valid(life_label): return
+    life_label.text = word(7)+"  "+str(lives)+"/3"
+    for i in range(life_icons.size()):
+        life_icons[i].modulate = Color.WHITE if i < lives else Color(0.4,0.4,0.4,0.55)
+
+func refresh_shop() -> void:
+    if not is_instance_valid(balance_label): return
+    balance_label.text = word(10)+"  "+str(coins)
+    main_balance.text = balance_label.text
+    for i in range(shop_buttons.size()):
+        shop_labels[i].text = word(23+i)
+        var b = shop_buttons[i]
+        if i == equipped:
+            b.text = word(12)
+            b.icon = tex("check")
+            b.disabled = true
+        elif owned.has(i):
+            b.text = word(11)
+            b.icon = tex("check")
+            b.disabled = false
+        else:
+            b.text = str(PRICES[i])+"  "+word(13)
+            b.icon = tex("lock")
+            b.disabled = coins < PRICES[i]
 
 func update_language() -> void:
-    heading.text = EXTRA[lang][1]
+    heading.text = word(28)
     help.text = {"en":"Collect 3 orbs, reach the flag.","ar":"اجمع ٣ كرات ثم بلغ العلم.","pt":"Colete 3 orbes e alcance a bandeira."}[lang]
-    restart.text = tr_word(6)
-    brake.text = tr_word(7)
-    play_again.text = tr_word(9)
+    restart.text = ""
+    menu_button.text = ""
+    brake.text = word(29)
+    play_again.text = word(9)
+    result_home.text = word(5)
     menu_title.text = {"en":"Marble Quest 3D","ar":"مغامرة الكرة 3D","pt":"Marble Quest 3D"}[lang]
     menu_subtitle.text = EXTRA[lang][2]
-    menu_play.text = EXTRA[lang][0]
-    menu_hint.text = EXTRA[lang][4]
-    menu_button.text = EXTRA[lang][3]
-    # Keep control geometry LTR so OS locale cannot mirror overlapping absolute positions.
-    # Godot's text shaping still handles Arabic bidirectional text automatically.
-    for c in [heading,help,stats,restart,brake,result,play_again,menu_title,menu_subtitle,menu_play,menu_hint,menu_button]:
-        c.layout_direction = Control.LAYOUT_DIRECTION_LTR
+    menu_hint.text = word(27)
+    menu_play.text = word(0)
+    actions["shop"].text = word(1)
+    actions["settings"].text = word(2)
+    page_titles["shop"].text = word(1)
+    page_titles["settings"].text = word(2)
+    page_titles["pause"].text = word(3)
+    actions["resume"].text = word(4)
+    actions["pause_restart"].text = word(30)
+    actions["pause_settings"].text = word(2)
+    actions["pause_home"].text = word(5)
+    actions["shop_back"].text = word(6)
+    actions["settings_back"].text = word(6)
+    actions["language_title"].text = word(22)
+    quality_button.text = word(15)+"  •  "+word(16+quality)
+    vibration_button.text = word(19)+"  •  "+word(20 if vibration else 21)
+    refresh_lives()
+    refresh_shop()
     layout_ui.call_deferred()
 
 func _input(event: InputEvent) -> void:

@@ -149,3 +149,43 @@ metadata=json.loads(source_path.read_text())
 metadata['additional_packs']={'Kenney Nature Kit':nature_source,'Quaternius Stylized Nature MegaKit Standard':forest_source}
 source_path.write_text(json.dumps(metadata,indent=2))
 print('Environment selected:',nature,forest,flush=True)
+
+
+# Kenney UI Pack and Game Icons, CC0, pinned to a verified mirror commit.
+UI_COMMIT='3694c6879e487c108f55677be7dd2ca75b07cc3b'
+UI_BASE='https://raw.githubusercontent.com/shorepine/kenney/'+UI_COMMIT+'/'
+ui_files={
+    'green_rect':'ui/UI Pack/Green/button_rectangle_depth_gloss.png',
+    'grey_rect':'ui/UI Pack/Grey/button_rectangle_depth_gloss.png',
+    'red_rect':'ui/UI Pack/Red/button_rectangle_depth_gloss.png',
+    'green_round':'ui/UI Pack/Green/button_round_depth_gloss.png',
+    'grey_round':'ui/UI Pack/Grey/button_round_depth_gloss.png',
+    'red_round':'ui/UI Pack/Red/button_round_depth_gloss.png',
+    'white_round':'ui/UI Pack/Grey/button_round_gloss.png',
+    'play':'ui/UI Pack/Extra/icon_play_light.png',
+    'repeat':'ui/UI Pack/Extra/icon_repeat_light.png',
+}
+for role,name in {'pause':'pause','stop':'stop','gear':'gear','shop':'shoppingCart','home':'home','back':'arrowLeft','gamepad':'gamepad','lock':'locked','check':'checkmark'}.items():
+    ui_files[role]='icons/Game Icons/White/2x/'+name+'.png'
+ui_dir=ROOT/'assets'/'ui'
+ui_dir.mkdir(parents=True,exist_ok=True)
+import time
+ui_hashes={}
+for key,name in ui_files.items():
+    url=UI_BASE+urllib.parse.quote(name,safe='/')
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url,headers={'User-Agent':'MarbleQuestBuild/1.1'}),timeout=45) as r:
+                raw=r.read(1_000_001)
+            if not raw.startswith(b'\x89PNG\r\n\x1a\n') or len(raw)>1_000_000:
+                raise ValueError('Not a valid PNG')
+            (ui_dir/(key+'.png')).write_bytes(raw)
+            ui_hashes[key]={'path':name,'sha256':hashlib.sha256(raw).hexdigest()}
+            break
+        except Exception as exc:
+            print('UI asset retry',key,exc,flush=True)
+            if attempt==2: raise
+            time.sleep(2)
+metadata['ui']={'author':'Kenney','license':'CC0-1.0','source':UI_BASE,'files':ui_hashes}
+source_path.write_text(json.dumps(metadata,indent=2))
+print('UI assets:',len(ui_hashes),flush=True)

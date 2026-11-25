@@ -1,3 +1,5 @@
 # Marble Quest 3D — vertical slice
 Godot 4.6.3 Compatibility, portrait, offline. One original test course, not a store-ready game. English, Arabic and Brazilian Portuguese UI. Kenney Marble Kit CC0 models fetched at build time; no human/animal models or music. No ads yet.
 Run python3 tools/fetch_assets.py then Godot import. GitHub Actions imports, smoke-tests and exports Android. Production signing requires ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD. Without these, CI uses an ephemeral key and a distinct com.mhmmad.marblequest3d.prototype package for testing only; never publish it to a store. No secrets committed. Real device performance, visuals, touch and release signing require verification. Three worlds, ten levels, store artwork, Huawei Ads and production privacy policy are not implemented yet.
+
+Version 1.1.0 adds separate main/shop/settings/pause screens, 3 attempts, points on completing the course, 4 cosmetic skins, persistent settings, real CC0 button textures and icons. No purchases, no ads, no music. One course remains; not a complete store release.
