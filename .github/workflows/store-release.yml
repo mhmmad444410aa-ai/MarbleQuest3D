@@ -1,6 +1,9 @@
 name: Store Release APK (stable signing)
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/store-release.yml']
 permissions:
   contents: read
 jobs:
@@ -22,12 +25,29 @@ jobs:
           for key in KS_B64 KS_PASS KEY_ALIAS KEY_PASS; do
             if [ -z "${!key}" ]; then echo "::error::Missing signing secret. Configure all four ANDROID signing secrets."; exit 1; fi
           done
-          curl --fail --location --retry 2 --max-time 40 'https://mhmmad444410aa-ai.github.io/MarbleQuest3D/' -o /tmp/privacy.html
+          curl --fail --location --retry 2 --max-time 40 'https://github.com/mhmmad444410aa-ai/MarbleQuest3D/blob/main/docs/PRIVACY.md' -o /tmp/privacy.html
           grep -Fq 'Marble Quest 3D Privacy Policy' /tmp/privacy.html
+          curl --fail --location --retry 2 --max-time 40 'https://raw.githubusercontent.com/mhmmad444410aa-ai/MarbleQuest3D/main/docs/PRIVACY.md' -o /tmp/privacy.md
+          grep -Fq '# Marble Quest 3D Privacy Policy' /tmp/privacy.md
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+      - name: Verify permanent signing certificate before expensive build
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          ks="$RUNNER_TEMP/preflight.jks"
+          trap 'rm -f "$ks"' EXIT
+          printf '%s' "$KS_B64" | base64 --decode > "$ks"
+          actual="$(keytool -exportcert -keystore "$ks" -storepass:env KS_PASS -alias "$KEY_ALIAS" | sha256sum | cut -d' ' -f1)"
+          test "$actual" = '4770a2920faf64fa7a3d285e1b93513e840ce0c0cda13cc2541bf7e424135a09' || { echo "::error::Signing certificate does not match the owner's permanent key"; exit 1; }
+          echo "Permanent signing certificate verified"
       - name: Install Android tools using runner SDK
         shell: bash
         run: |
@@ -97,6 +117,7 @@ jobs:
           "$bt/zipalign" -P 16 -f 4 build/unsigned.apk "$RUNNER_TEMP/aligned.apk"
           "$bt/apksigner" sign --ks "$ks" --ks-key-alias "$KEY_ALIAS" --ks-pass env:KS_PASS --key-pass env:KEY_PASS --out build/MarbleQuest3D-release.apk "$RUNNER_TEMP/aligned.apk"
           "$bt/apksigner" verify --verbose --print-certs build/MarbleQuest3D-release.apk | tee build/certificate.txt
+          grep -Fq 'Signer #1 certificate SHA-256 digest: 4770a2920faf64fa7a3d285e1b93513e840ce0c0cda13cc2541bf7e424135a09' build/certificate.txt
           "$bt/aapt" dump badging build/MarbleQuest3D-release.apk > build/badging.txt
           grep -Fq "package: name='$expected'" build/badging.txt
           grep -Fq "versionCode='14'" build/badging.txt
@@ -161,5 +182,5 @@ jobs:
           unzip -tq MarbleQuest3D.apk
           sha256sum MarbleQuest3D.apk > SHA256SUMS.txt
           tag="store-candidate-1.7.1-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          gh release create "$tag" MarbleQuest3D.apk SHA256SUMS.txt --target "$GITHUB_SHA" --prerelease --title "Marble Quest 3D 1.7.1 - signed store candidate" --notes "Permanent signing secrets used. Offline, ad-free candidate. Automated checks passed; install and visual/device testing required before submission. Privacy: https://mhmmad444410aa-ai.github.io/MarbleQuest3D/"
+          gh release create "$tag" MarbleQuest3D.apk SHA256SUMS.txt --target "$GITHUB_SHA" --prerelease --title "Marble Quest 3D 1.7.1 - signed store candidate" --notes "Permanent signing secrets used. Offline, ad-free candidate. Automated checks passed; install and visual/device testing required before submission. Privacy: https://github.com/mhmmad444410aa-ai/MarbleQuest3D/blob/main/docs/PRIVACY.md"
           gh release view "$tag" --json url,assets

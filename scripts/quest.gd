@@ -1473,7 +1473,7 @@ func make_ui() -> void:
     var about = make_page("about")
     info_text = label(about,"",26,Rect2())
     info_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    action(about,"privacy_policy","home",func(): OS.shell_open("https://mhmmad444410aa-ai.github.io/MarbleQuest3D/"),"grey")
+    action(about,"privacy_policy","home",func(): OS.shell_open("https://github.com/mhmmad444410aa-ai/MarbleQuest3D/blob/main/docs/PRIVACY.md"),"grey")
     action(about,"about_back","back",func(): show_screen("settings"),"grey")
 
     var paused = make_page("pause")

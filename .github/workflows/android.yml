@@ -1,8 +1,6 @@
 name: Prototype Android verification
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
 permissions:
   contents: read
 jobs:
@@ -67,10 +65,10 @@ jobs:
           if grep -E 'SCRIPT ERROR|Parse Error' import.log smoke.log; then exit 1; fi
       - name: Export and sign prototype
         env:
-          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KS_B64: ''
+          KS_PASS: ''
+          KEY_ALIAS: ''
+          KEY_PASS: ''
         run: |
           set -euo pipefail
           umask 077
