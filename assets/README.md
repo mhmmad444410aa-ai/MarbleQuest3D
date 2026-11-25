@@ -19,3 +19,5 @@ Royal UI (1.2.0): original SVG artwork authored for this project, inspired by th
 1.5.0 collision hotfix: mandatory decks and junctions now use a common top plane, with small connector offsets, shortened side rails, and straight-segment obstacle placement. Optional elevated terraces keep a separate shallow ramp. The 24-course real traversal test remains mandatory.
 
 1.6.0: new original 2D menu sprites and icon set; original non-musical synthetic foley; 10 gold for regular pickups, 50 for optional blue pickup, bank gold on victory; higher skin prices, narrower late-stage paths; additional CC0 Nature Kit rock and tree models with manifest and archive provenance. Existing 24 stages and original controls preserved.
+
+1.6.0 hotfix: compute and validate an independent bonus terrace direction for every course so blue rewards cannot overlap mandatory tracks (stage 7 previously crossed the blue pickup). All 24 traversal, exact gold banking and separate blue bonus tests remain enabled.

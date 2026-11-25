@@ -176,6 +176,16 @@ func run() -> void:
             push_error("Stage data or progression failed "+str(stage))
             quit(1)
             return
+        if stage>=2:
+            for j in range(scene.route_points.size()-1):
+                var a: Vector3 = scene.route_points[j]
+                var b: Vector3 = scene.route_points[j+1]
+                var point: Vector3 = scene.secret_origin
+                var clearance = Geometry2D.get_closest_point_to_segment(Vector2(point.x,point.z),Vector2(a.x,a.z),Vector2(b.x,b.z)).distance_to(Vector2(point.x,point.z))
+                if clearance<5.0:
+                    push_error("Blue bonus overlaps mandatory route "+str(stage+1))
+                    quit(1)
+                    return
         var waypoint = 1
         for tick in range(4800):
             await physics_frame
@@ -197,8 +207,8 @@ func run() -> void:
             push_error("Missing distinct deck artwork "+str(stage))
             quit(1)
             return
-        if scene.run_gold != 30 or scene.coins != gold_before+30:
-            push_error("Gold reward failed stage "+str(stage+1))
+        if scene.secret_claimed or scene.run_gold != 30 or scene.coins != gold_before+30:
+            push_error("Gold reward failed stage %d: run=%d banked=%d blue=%s" % [stage+1,scene.run_gold,scene.coins-gold_before,str(scene.secret_claimed)])
             quit(1)
             return
         print("FULL_COURSE_OK ",stage+1)

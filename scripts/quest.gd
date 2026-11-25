@@ -86,6 +86,8 @@ const ROUTES = [
  [[0,2],[0,-8],[8,-14],[12,-23],[4,-31],[-6,-31],[-13,-40],[-6,-49],[3,-49],[10,-58],[0,-66]]
 ]
 const STAGE_COUNT = 24
+# Hand-validated off-route bonus bearings, clear of every mandatory segment.
+const BONUS_DIRECTIONS = [Vector3(0.92388,0,0.382683),Vector3(-1,0,0),Vector3(-0.92388,0,0.382683),Vector3(-0.707107,0,-0.707107),Vector3(-0.92388,0,0.382683),Vector3(0.92388,0,0.382683),Vector3(0.382683,0,-0.92388),Vector3(0.92388,0,0.382683),Vector3(-0.92388,0,0.382683),Vector3(-1,0,0),Vector3(-0.92388,0,0.382683),Vector3(0.92388,0,0.382683),Vector3(0.92388,0,0.382683),Vector3(0.92388,0,-0.382683),Vector3(-1,0,0),Vector3(-0.707107,0,0.707107),Vector3(-1,0,0),Vector3(0.707107,0,0.707107),Vector3(-0.382683,0,0.92388),Vector3(0.92388,0,0.382683),Vector3(-0.92388,0,0.382683),Vector3(0.92388,0,0.382683),Vector3(-0.92388,0,0.382683),Vector3(-0.707107,0,-0.707107)]
 const DECK_COLORS = ["6c7c80","426b59","8d7756","625779","85603e","617f91","5e7453","414959","476f82","805649","77756b","645a81"]
 const SKY_COLORS = ["7fb9d9","76b8a6","d6ab75","9387c5","d6a575","a5c6e6","8dbba1","66758e","619ec7","c18d80","aebec9","7776a9"]
 var route_points: Array[Vector3] = []
@@ -587,6 +589,7 @@ func reset_course() -> void:
     result.visible = false
     result_backdrop.visible = false
     result_symbol.visible = false
+    if is_instance_valid(gold_tween): gold_tween.kill()
     gold_flash.visible = false
     play_again.visible = false
     result_home.visible = false
@@ -733,10 +736,10 @@ func build_route() -> void:
             platform(point,Vector3(size,0.65,size))
     if stage_index >= 2:
         var anchor: Vector3 = route_points[1]
-        var side = -1.0 if anchor.x<=0.0 else 1.0
-        var bonus = anchor+Vector3(side*7.4,0.22,0)
-        var ramp_start = anchor+Vector3(side*2.1,0,0)
-        var ramp_end = bonus-Vector3(side*1.7,0,0)
+        var branch: Vector3 = BONUS_DIRECTIONS[stage_index]
+        var bonus = anchor+branch*7.4+Vector3(0,0.22,0)
+        var ramp_start = anchor+branch*2.9
+        var ramp_end = bonus-branch*1.9
         connect_decks(anchor,ramp_start,2.8,false)
         connect_decks(ramp_start,ramp_end,2.8,false)
         connect_decks(ramp_end,bonus,2.8,false)
