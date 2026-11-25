@@ -11,6 +11,7 @@ func run() -> void:
         push_error("Smoke: missing scene components")
         quit(1)
         return
+    scene.set_menu(false)
     for i in range(100):
         await physics_frame
     if scene.ball.position.y < 0.15 or scene.falls != 0:
@@ -32,6 +33,11 @@ func run() -> void:
         if scene.heading.text.is_empty():
             quit(1)
             return
+    scene.set_menu(true)
+    if not scene.menu.visible or scene.hud.visible:
+        quit(1)
+        return
+    scene.set_menu(false)
     scene.reset_course()
     await process_frame
     if scene.count != 0 or scene.finished or not is_instance_valid(scene.ball):

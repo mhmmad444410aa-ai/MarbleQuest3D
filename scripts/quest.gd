@@ -35,6 +35,25 @@ var gate: Area3D
 var bridge: AnimatableBody3D
 var blocker: AnimatableBody3D
 var clock = 0.0
+var menu_open = true
+var ui_root: Control
+var hud: Control
+var menu: Control
+var menu_title: Label
+var menu_subtitle: Label
+var menu_play: Button
+var menu_hint: Label
+var menu_button: Button
+var joystick_knob: Panel
+var hud_panel: Panel
+var menu_panel: Panel
+var language_buttons: Array[Button] = []
+var materials: Dictionary = {}
+const EXTRA = {
+    "en": ["Play", "Sky Crossing", "A floating-island expedition", "Menu", "Choose your language"],
+    "ar": ["ابدأ", "عبور السماء", "مغامرة بين الجزر العائمة", "القائمة", "اختر لغتك"],
+    "pt": ["Jogar", "Travessia Celeste", "Uma expedição entre ilhas flutuantes", "Menu", "Escolha seu idioma"]
+}
 
 func _ready() -> void:
     read_save()
@@ -57,6 +76,7 @@ func _ready() -> void:
         packed[key] = resource
     make_environment()
     reset_course()
+    set_menu(true)
 
 func tr_word(index: int) -> String:
     return WORDS[lang][index]
@@ -66,26 +86,26 @@ func make_environment() -> void:
     var env = Environment.new()
     var sky = Sky.new()
     var sky_mat = ProceduralSkyMaterial.new()
-    sky_mat.sky_top_color = Color("354f78")
-    sky_mat.sky_horizon_color = Color("b9dfd1")
-    sky_mat.ground_bottom_color = Color("384966")
-    sky_mat.ground_horizon_color = Color("b9dfd1")
+    sky_mat.sky_top_color = Color("7595ad")
+    sky_mat.sky_horizon_color = Color("e6e1c8")
+    sky_mat.ground_bottom_color = Color("557c89")
+    sky_mat.ground_horizon_color = Color("c2d6d4")
     sky.sky_material = sky_mat
     env.background_mode = Environment.BG_SKY
     env.sky = sky
     env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
     env.ambient_light_color = Color("d5e6f2")
-    env.ambient_light_energy = 0.7
+    env.ambient_light_energy = 0.62
     world.environment = env
     add_child(world)
     var sun = DirectionalLight3D.new()
     sun.rotation_degrees = Vector3(-52, -32, 0)
     sun.light_color = Color("fff1cf")
-    sun.light_energy = 1.25
+    sun.light_energy = 0.95
     sun.shadow_enabled = true
     add_child(sun)
     camera = Camera3D.new()
-    camera.fov = 53
+    camera.fov = 58
     camera.current = true
     add_child(camera)
 
@@ -117,7 +137,31 @@ func model(kind: String, parent: Node3D, size: Vector3, offset: Vector3 = Vector
     var factor = size / Vector3(maxf(bounds.size.x, 0.001), maxf(bounds.size.y, 0.001), maxf(bounds.size.z, 0.001))
     mesh.scale = factor
     mesh.position = -bounds.get_center() * factor + offset
+    apply_palette(kind, mesh)
     return wrapper
+
+func palette_material(key: String, colour: Color, roughness: float, metallic: float) -> StandardMaterial3D:
+    if not materials.has(key):
+        var mat = StandardMaterial3D.new()
+        mat.albedo_color = colour
+        mat.roughness = roughness
+        mat.metallic = metallic
+        materials[key] = mat
+    return materials[key]
+
+func apply_palette(kind: String, root: Node3D) -> void:
+    var parts = root.find_children("*", "MeshInstance3D", true, false)
+    if root is MeshInstance3D:
+        parts.push_front(root)
+    var mat: StandardMaterial3D
+    match kind:
+        "track": mat = palette_material("track", Color("c4aa7e"), 0.88, 0.0)
+        "ball": mat = palette_material("ball", Color("287c88"), 0.19, 0.38)
+        "tree": mat = palette_material("tree", Color("416c54"), 0.88, 0.0)
+        "marker": mat = palette_material("marker", Color("a34e30"), 0.58, 0.05)
+        _: mat = palette_material("support", Color("6a7f79"), 0.86, 0.0)
+    for part in parts:
+        part.material_override = mat
 
 func collider(parent: CollisionObject3D, size: Vector3, pos: Vector3) -> void:
     var col = CollisionShape3D.new()
@@ -135,7 +179,7 @@ func platform(pos: Vector3, size: Vector3, moving: bool = false) -> Node3D:
         body = StaticBody3D.new()
     course.add_child(body)
     body.position = pos
-    model("track", body, size, Vector3(0, -size.y/2, 0))
+    model("track", body, size, Vector3(0, -size.y*0.30, 0))
     collider(body, Vector3(size.x * 0.95, size.y, size.z), Vector3(0, -size.y/2, 0))
     return body
 
@@ -156,7 +200,13 @@ func area_at(pos: Vector3, size: Vector3) -> Area3D:
 
 func orb(pos: Vector3) -> void:
     var a = area_at(pos, Vector3(1.1, 1.1, 1.1))
-    model("ball", a, Vector3.ONE * 0.48)
+    var pickup = model("ball", a, Vector3.ONE * 0.48)
+    var gold = palette_material("pickup", Color("ffc46b"), 0.27, 0.35)
+    gold.emission_enabled = true
+    gold.emission = Color("c77927")
+    gold.emission_energy_multiplier = 0.45
+    for part in pickup.find_children("*", "MeshInstance3D", true, false):
+        part.material_override = gold
     var light = OmniLight3D.new()
     light.light_color = Color("67ffe0")
     light.light_energy = 0.8
@@ -198,7 +248,14 @@ func reset_course() -> void:
     decoration("tree",Vector3(2.0,1.3,-9),Vector3(1.1,2.6,1.1))
     decoration("tree",Vector3(-1.9,1.1,-25),Vector3(1.1,2.2,1.1))
     for z in [0,-9,-17,-25]:
-        decoration("support",Vector3(0,-1.6,z),Vector3(2.2,2.4,2.2))
+        decoration("support",Vector3(0,-1.7,z),Vector3(3.0,2.6,2.6))
+        decoration("support",Vector3(0,-3.5,z),Vector3(1.7,1.5,1.5))
+    for i in range(6):
+        var side = -1.0 if i % 2 == 0 else 1.0
+        var island = Vector3(side*(8.0+float(i%3)*2.5), -2.5-float(i%2), -float(i)*5.0)
+        decoration("support",island,Vector3(4.2,3.0,3.8))
+        decoration("tree",island+Vector3(0,2.6,0),Vector3(1.6,2.4,1.6))
+        decoration("tree",island+Vector3(1.0,2.2,0.9),Vector3(0.85,1.5,0.85))
     decoration("marker",Vector3(1.7,1.25,-17),Vector3(0.7,2.2,0.7))
     decoration("marker",Vector3(1.8,1.5,-25),Vector3(0.9,2.8,0.9))
     orb(Vector3(0,0.7,-4.8))
@@ -241,7 +298,7 @@ func reset_course() -> void:
     camera.look_at(spawn + Vector3(0,0,-3))
 
 func _physics_process(delta: float) -> void:
-    if not is_instance_valid(ball) or finished:
+    if not is_instance_valid(ball) or finished or menu_open:
         return
     elapsed += delta
     clock += delta
@@ -250,10 +307,10 @@ func _physics_process(delta: float) -> void:
     var axis = move
     axis += Vector2(float(Input.is_physical_key_pressed(KEY_D))-float(Input.is_physical_key_pressed(KEY_A)),float(Input.is_physical_key_pressed(KEY_S))-float(Input.is_physical_key_pressed(KEY_W)))
     axis = axis.limit_length(1.0)
-    ball.apply_central_force(Vector3(axis.x,0,axis.y) * 22.0)
+    ball.apply_central_force(Vector3(axis.x,0,axis.y) * 16.0)
     var horizontal = Vector2(ball.linear_velocity.x,ball.linear_velocity.z)
-    if horizontal.length() > 7.5:
-        var limited = horizontal.limit_length(7.5)
+    if horizontal.length() > 5.5:
+        var limited = horizontal.limit_length(5.5)
         ball.linear_velocity = Vector3(limited.x,ball.linear_velocity.y,limited.y)
     ball.linear_damp = 5.0 if braking else 0.4
     ball.angular_damp = 4.0 if braking else 0.3
@@ -268,7 +325,9 @@ func _physics_process(delta: float) -> void:
     for a in orbs:
         if is_instance_valid(a):
             a.rotate_y(delta*1.6)
-    stats.text = "%s %d/3  •  %s %d  •  %s %ds" % [tr_word(3),count,tr_word(4),falls,tr_word(5),int(elapsed)]
+    stats.text = "%s %d/3    •    %s %d    •    %s %ds" % [tr_word(3),count,tr_word(4),falls,tr_word(5),int(elapsed)]
+    if is_instance_valid(joystick_knob):
+        joystick_knob.position = (pad.size - joystick_knob.size) * 0.5 + move * 54.0
     if gate.overlaps_body(ball) and count == 3:
         finish_course()
 
@@ -318,75 +377,163 @@ func button(parent: Control, caption: String, rect: Rect2) -> Button:
     b.text = caption
     b.add_theme_font_size_override("font_size",23)
     var style = StyleBoxFlat.new()
-    style.bg_color = Color("173b4b")
-    style.border_color = Color("76d8c7")
+    style.bg_color = Color("183c40")
+    style.border_color = Color("c1ac78")
     style.set_border_width_all(2)
     style.set_corner_radius_all(18)
     b.add_theme_stylebox_override("normal",style)
     var pressed_style = style.duplicate()
     pressed_style.bg_color = Color("356a75")
     b.add_theme_stylebox_override("pressed",pressed_style)
+    b.add_theme_stylebox_override("hover",pressed_style)
+    b.layout_direction = Control.LAYOUT_DIRECTION_LTR
     return b
+
+func panel_style(bg: Color, line: Color, radius: int) -> StyleBoxFlat:
+    var style = StyleBoxFlat.new()
+    style.bg_color = bg
+    style.border_color = line
+    style.set_border_width_all(2)
+    style.set_corner_radius_all(radius)
+    return style
 
 func make_ui() -> void:
     var layer = CanvasLayer.new()
     add_child(layer)
-    var ui = Control.new()
-    layer.add_child(ui)
-    ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    var top = ColorRect.new()
-    ui.add_child(top)
-    top.size = Vector2(720,230)
-    top.color = Color(0.035,0.09,0.13,0.90)
-    top.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    heading = label(ui,"",36,Rect2(20,8,680,52))
-    help = label(ui,"",22,Rect2(24,62,672,92))
-    stats = label(ui,"",25,Rect2(16,160,688,42))
+    ui_root = Control.new()
+    ui_root.layout_direction = Control.LAYOUT_DIRECTION_LTR
+    layer.add_child(ui_root)
+    ui_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    ui_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    hud = Control.new()
+    ui_root.add_child(hud)
+    hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    hud_panel = Panel.new()
+    hud.add_child(hud_panel)
+    hud_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    hud_panel.add_theme_stylebox_override("panel",panel_style(Color(0.06,0.15,0.17,0.89),Color("c1ac78"),22))
+    heading = label(hud,"",30,Rect2())
+    help = label(hud,"",20,Rect2())
+    stats = label(hud,"",22,Rect2())
+    restart = button(hud,"",Rect2())
+    restart.pressed.connect(func():
+        if is_instance_valid(ball): reset_course())
+    menu_button = button(hud,"",Rect2())
+    menu_button.pressed.connect(func(): set_menu(true))
+    pad = Panel.new()
+    hud.add_child(pad)
+    pad.add_theme_stylebox_override("panel",panel_style(Color(0.06,0.18,0.2,0.68),Color("d5c392"),125))
+    joystick_knob = Panel.new()
+    pad.add_child(joystick_knob)
+    joystick_knob.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    joystick_knob.size = Vector2(78,78)
+    joystick_knob.add_theme_stylebox_override("panel",panel_style(Color("d5c392"),Color("fff1c9"),39))
+    pad.gui_input.connect(pad_input)
+    brake = button(hud,"",Rect2())
+    brake.button_down.connect(func(): braking = true)
+    brake.button_up.connect(func(): braking = false)
+    result = label(hud,"",40,Rect2())
+    result.add_theme_color_override("font_color",Color("ffe198"))
+    result.add_theme_color_override("font_outline_color",Color("173b4b"))
+    result.add_theme_constant_override("outline_size",8)
+    result.visible = false
+    play_again = button(hud,"",Rect2())
+    play_again.visible = false
+    play_again.pressed.connect(func(): reset_course())
+    menu = Control.new()
+    ui_root.add_child(menu)
+    menu.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    menu.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    menu_panel = Panel.new()
+    menu.add_child(menu_panel)
+    menu_panel.add_theme_stylebox_override("panel",panel_style(Color(0.06,0.14,0.16,0.94),Color("c1ac78"),32))
+    menu_title = label(menu,"",43,Rect2())
+    menu_title.add_theme_color_override("font_color",Color("ffe4ae"))
+    menu_subtitle = label(menu,"",26,Rect2())
+    menu_hint = label(menu,"",20,Rect2())
+    menu_play = button(menu,"",Rect2())
+    menu_play.add_theme_font_size_override("font_size",32)
+    menu_play.pressed.connect(func():
+        if is_instance_valid(ball): set_menu(false))
     for i in range(3):
         var code = ["en","ar","pt"][i]
-        var b = button(ui,["EN","عربي","PT"][i],Rect2(20+i*88,242,82,55))
+        var b = button(menu,["EN","العربية","PT-BR"][i],Rect2())
+        language_buttons.append(b)
         b.pressed.connect(func():
             lang = code
             update_language()
             write_save())
-    restart = button(ui,"",Rect2(510,242,190,55))
-    restart.pressed.connect(func():
-        if is_instance_valid(ball): reset_course())
-    pad = Panel.new()
-    ui.add_child(pad)
-    pad.position = Vector2(28,995)
-    pad.size = Vector2(250,250)
-    var pad_style = StyleBoxFlat.new()
-    pad_style.bg_color = Color(0.06,0.19,0.24,0.75)
-    pad_style.border_color = Color("8be3d7")
-    pad_style.set_border_width_all(3)
-    pad_style.set_corner_radius_all(125)
-    pad.add_theme_stylebox_override("panel",pad_style)
-    label(pad,"↑\n←  •  →\n↓",44,Rect2(15,15,220,220))
-    pad.gui_input.connect(pad_input)
-    brake = button(ui,"",Rect2(510,1080,180,135))
-    brake.button_down.connect(func(): braking = true)
-    brake.button_up.connect(func(): braking = false)
-    result = label(ui,"",46,Rect2(30,450,660,210))
-    result.add_theme_color_override("font_color",Color("ffe198"))
-    result.add_theme_color_override("font_outline_color",Color("173b4b"))
-    result.add_theme_constant_override("outline_size",12)
-    result.visible = false
-    play_again = button(ui,"",Rect2(165,675,390,90))
-    play_again.visible = false
-    play_again.pressed.connect(func(): reset_course())
+    ui_root.resized.connect(layout_ui)
     update_language()
+    layout_ui()
+    set_menu(true)
+
+func place(c: Control, x: float, y: float, w: float, h: float) -> void:
+    c.position = Vector2(x,y)
+    c.size = Vector2(w,h)
+
+func layout_ui() -> void:
+    if not is_instance_valid(menu_panel): return
+    var w = ui_root.size.x
+    var h = ui_root.size.y
+    if w < 320 or h < 500: return
+    var cx = w * 0.5
+    var pw = minf(w-36,620)
+    place(hud_panel,18,20,w-36,154)
+    place(heading,32,27,w-64,46)
+    place(stats,32,76,w-64,40)
+    place(help,32,116,w-64,44)
+    place(restart,20,188,146,52)
+    place(menu_button,w-166,188,146,52)
+    place(pad,24,h-252,216,216)
+    place(joystick_knob,69,69,78,78)
+    place(brake,w-174,h-155,150,104)
+    place(result,24,h*0.38,w-48,190)
+    place(play_again,cx-160,h*0.38+200,320,76)
+    var y = h*0.37
+    place(menu_panel,cx-pw*0.5,y,pw,420)
+    place(menu_title,cx-pw*0.5+16,y+22,pw-32,104)
+    place(menu_subtitle,cx-pw*0.5+16,y+132,pw-32,64)
+    place(menu_play,cx-pw*0.5+32,y+209,pw-64,86)
+    place(menu_hint,cx-pw*0.5+16,y+308,pw-32,38)
+    var bw = (pw-76)/3.0
+    for i in range(language_buttons.size()):
+        place(language_buttons[i],cx-pw*0.5+24+i*(bw+14),y+352,bw,48)
+
+func set_menu(open: bool) -> void:
+    menu_open = open
+    hud.visible = not open
+    menu.visible = open
+    move = Vector2.ZERO
+    touch_id = -1
+    braking = false
+    if is_instance_valid(ball):
+        ball.freeze = open or finished
 
 func update_language() -> void:
-    heading.text = tr_word(0)
-    help.text = tr_word(1)+"\n"+tr_word(2)
+    heading.text = EXTRA[lang][1]
+    help.text = tr_word(2)
     restart.text = tr_word(6)
     brake.text = tr_word(7)
     play_again.text = tr_word(9)
-    var direction = Control.LAYOUT_DIRECTION_RTL if lang == "ar" else Control.LAYOUT_DIRECTION_LTR
-    for c in [heading,help,stats,restart,brake,result,play_again]:
-        c.layout_direction = direction
+    menu_title.text = tr_word(0)
+    menu_subtitle.text = EXTRA[lang][2]
+    menu_play.text = EXTRA[lang][0]
+    menu_hint.text = EXTRA[lang][4]
+    menu_button.text = EXTRA[lang][3]
+    # Keep control geometry LTR so OS locale cannot mirror overlapping absolute positions.
+    # Godot's text shaping still handles Arabic bidirectional text automatically.
+    for c in [heading,help,stats,restart,brake,result,play_again,menu_title,menu_subtitle,menu_play,menu_hint,menu_button]:
+        c.layout_direction = Control.LAYOUT_DIRECTION_LTR
+
+func _input(event: InputEvent) -> void:
+    if event is InputEventScreenTouch and not event.pressed and event.index == touch_id:
+        touch_id = -1
+        move = Vector2.ZERO
+    elif event is InputEventMouseButton and not event.pressed and touch_id == -2:
+        touch_id = -1
+        move = Vector2.ZERO
 
 func pad_input(event: InputEvent) -> void:
     if event is InputEventScreenTouch:
