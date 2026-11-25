@@ -98,6 +98,9 @@ var preview_box: SubViewportContainer
 var preview_world: SubViewport
 var preview_mesh: Node3D
 var preview_pedestal: Node3D
+var cloud_nodes: Array[MeshInstance3D] = []
+var cloud_origins: Array[Vector3] = []
+var material_textures: Dictionary = {}
 var royal_textures: Dictionary = {}
 var preview_caption: Label
 var achievement_text: Label
@@ -153,8 +156,8 @@ func make_environment() -> void:
     var env = Environment.new()
     var sky = Sky.new()
     var sky_mat = ProceduralSkyMaterial.new()
-    sky_mat.sky_top_color = Color("7595ad")
-    sky_mat.sky_horizon_color = Color("e6e1c8")
+    sky_mat.sky_top_color = Color("4387bc")
+    sky_mat.sky_horizon_color = Color("d9edff")
     sky_mat.ground_bottom_color = Color("557c89")
     sky_mat.ground_horizon_color = Color("c2d6d4")
     sky.sky_material = sky_mat
@@ -162,13 +165,13 @@ func make_environment() -> void:
     env.sky = sky
     env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
     env.ambient_light_color = Color("d5e6f2")
-    env.ambient_light_energy = 0.42
+    env.ambient_light_energy = 0.68
     world.environment = env
     add_child(world)
     var sun = DirectionalLight3D.new()
     sun.rotation_degrees = Vector3(-52, -32, 0)
     sun.light_color = Color("fff1cf")
-    sun.light_energy = 0.72
+    sun.light_energy = 1.04
     sun.shadow_enabled = true
     sun_light = sun
     add_child(sun)
@@ -177,6 +180,84 @@ func make_environment() -> void:
     camera.fov = 58
     camera.current = true
     add_child(camera)
+    create_clouds()
+
+func art_texture(key: String) -> Texture2D:
+    if not material_textures.has(key):
+        var path = "res://assets/material_art/" + key + ".png"
+        if ResourceLoader.exists(path):
+            material_textures[key] = load(path)
+    return material_textures.get(key) as Texture2D
+
+func create_clouds() -> void:
+    var tex_cloud = art_texture("cloud")
+    if tex_cloud == null: return
+    var mat = StandardMaterial3D.new()
+    mat.albedo_texture = tex_cloud
+    mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+    mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+    mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+    for i in range(12):
+        var cloud = MeshInstance3D.new()
+        var quad = QuadMesh.new()
+        quad.size = Vector2(15.0+float(i%3)*4.0,7.0+float(i%2)*2.0)
+        cloud.mesh = quad
+        cloud.material_override = mat
+        cloud.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+        add_child(cloud)
+        var origin = Vector3((-1.0 if i%2==0 else 1.0)*(11.0+float(i%4)*5.0),-5.0+float(i%3)*2.1,-float(i)*6.0-4.0)
+        cloud.position = origin
+        cloud_nodes.append(cloud)
+        cloud_origins.append(origin)
+
+func marble_visual(parent: Node3D, diameter: float) -> Node3D:
+    var wrapper = Node3D.new()
+    parent.add_child(wrapper)
+    var mesh = MeshInstance3D.new()
+    var sphere = SphereMesh.new()
+    sphere.radius = diameter*0.5
+    sphere.height = diameter
+    sphere.radial_segments = 48
+    sphere.rings = 24
+    mesh.mesh = sphere
+    wrapper.add_child(mesh)
+    return wrapper
+
+func stone_piece(parent: Node3D, pos: Vector3, size: Vector3, angle: float = 0.0) -> void:
+    var part = MeshInstance3D.new()
+    var block = BoxMesh.new()
+    block.size = size
+    part.mesh = block
+    part.material_override = palette_material("track",Color("8a856e"),0.88,0.0)
+    parent.add_child(part)
+    part.position = pos
+    part.rotation.z = angle
+
+func ruin_arch(pos: Vector3, scale_factor: float) -> void:
+    var arch = Node3D.new()
+    course.add_child(arch)
+    arch.position = pos
+    arch.scale = Vector3.ONE*scale_factor
+    for side in [-1.0,1.0]:
+        for row in range(4):
+            stone_piece(arch,Vector3(side*1.25,0.23+float(row)*0.48,0),Vector3(0.58,0.46,0.72))
+        stone_piece(arch,Vector3(side*1.25,0.13,0),Vector3(0.85,0.26,0.95))
+    for i in range(11):
+        var theta = float(i)*PI/10.0
+        stone_piece(arch,Vector3(cos(theta)*1.25,1.98+sin(theta)*1.25,0),Vector3(0.58,0.43,0.76),theta)
+
+func flowing_water(pos: Vector3, width: float, height: float) -> void:
+    var sheet = MeshInstance3D.new()
+    var quad = QuadMesh.new()
+    quad.size = Vector2(width,height)
+    sheet.mesh = quad
+    var mat = ShaderMaterial.new()
+    mat.shader = load("res://assets/material_shaders/waterfall.gdshader")
+    sheet.material_override = mat
+    sheet.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    course.add_child(sheet)
+    sheet.position = pos
 
 func mesh_bounds(node: Node3D, root: Node3D) -> AABB:
     var box = AABB()
@@ -216,6 +297,15 @@ func palette_material(key: String, colour: Color, roughness: float, metallic: fl
         mat.albedo_color = colour
         mat.roughness = roughness
         mat.metallic = metallic
+        if key == "track":
+            mat.albedo_color = Color.WHITE
+            mat.albedo_texture = art_texture("stone")
+            mat.normal_enabled = true
+            mat.normal_texture = art_texture("stone_normal")
+            mat.normal_scale = 0.55
+            mat.uv1_triplanar = true
+            mat.uv1_world_triplanar = true
+            mat.uv1_scale = Vector3.ONE*0.65
         materials[key] = mat
     return materials[key]
 
@@ -362,7 +452,7 @@ func reset_course() -> void:
     sphere.radius = 0.38
     col.shape = sphere
     ball.add_child(col)
-    ball_visual = model("ball",ball,Vector3.ONE * 0.76)
+    ball_visual = marble_visual(ball,0.76)
     ball.freeze = menu_open
     brake_touch = -1
     touch_id = -1
@@ -406,6 +496,16 @@ func island_landscape() -> void:
     decoration("waterfall",Vector3(7.3,-4.0,-7),Vector3(3.0,6.5,3.0))
     # Actual imported bridge model on a background island, not a collider.
     decoration("bridge_wood",Vector3(8.1,-0.6,-15),Vector3(1.8,0.6,3.5))
+    # Architectural landmarks outside the playable path; preserve all collision geometry.
+    ruin_arch(Vector3(-7.4,-0.5,0.0),1.15)
+    ruin_arch(Vector3(8.9,-0.2,-5.0),1.0)
+    ruin_arch(Vector3(-10.4,-0.4,-10.0),1.2)
+    flowing_water(Vector3(-4.1,-3.1,-15.65),1.15,4.8)
+    flowing_water(Vector3(7.4,-4.0,-5.4),1.6,6.3)
+    for i in range(6):
+        var v = Vector3((-1.0 if i%2==0 else 1.0)*(7.4+float(i%3)*1.5),0.05-float(i%2)*0.7,-float(i)*5.0)
+        decoration("flower",v+Vector3(0.55,0.15,0.65),Vector3(0.48,0.45,0.48))
+        decoration("grass",v+Vector3(-0.35,0.1,0.9),Vector3(0.66,0.45,0.66))
 
 func _physics_process(delta: float) -> void:
     if not is_instance_valid(ball) or finished or menu_open:
@@ -494,8 +594,12 @@ func apply_skin() -> void:
 
 func skin_material(index: int) -> StandardMaterial3D:
     var mat = palette_material("skin_"+str(index),SKINS[index], [0.23,0.18,0.26,0.33,0.20,0.20,0.22,0.13,0.12,0.38,0.56,0.18][index], [0.28,0.82,0.34,0.1,0.32,0.4,0.25,0.65,0.1,0.8,0.06,0.45][index])
+    var art = art_texture("marble_%02d" % index)
+    if art != null:
+        mat.albedo_texture = art
+        mat.albedo_color = Color.WHITE
     mat.rim_enabled = true
-    mat.rim = 0.35
+    mat.rim = 0.42
     if index == 8 or index == 11:
         mat.emission_enabled = true
         mat.emission = SKINS[index]
@@ -1148,7 +1252,7 @@ func setup_preview() -> void:
     cam.position = Vector3(0,1.05,4.8)
     cam.look_at(Vector3.ZERO)
     cam.current = true
-    preview_mesh = model("ball",root,Vector3.ONE*2.1)
+    preview_mesh = marble_visual(root,2.1)
     preview_pedestal = model("track",root,Vector3(2.55,0.35,2.55),Vector3(0,-1.19,0))
     preview_pedestal.visible = screen == "main"
     refresh_preview()
@@ -1164,6 +1268,11 @@ func refresh_preview() -> void:
         part.material_override = mat
 
 func _process(delta: float) -> void:
+    if screen == "main" or screen == "play":
+        visual_clock += delta
+        for i in range(cloud_nodes.size()):
+            if is_instance_valid(cloud_nodes[i]):
+                cloud_nodes[i].position.x = cloud_origins[i].x + sin(visual_clock*0.14+float(i))*2.6
     if is_instance_valid(preview_mesh) and screen in ["shop","main"]:
         preview_mesh.rotate_y(delta*0.7)
     if is_instance_valid(ball_visual) and screen == "main":

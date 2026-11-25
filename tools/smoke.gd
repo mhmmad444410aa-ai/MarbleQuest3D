@@ -47,6 +47,17 @@ func run() -> void:
         push_error("Smoke: royal UI artwork not imported")
         quit(1)
         return
+    for i in range(12):
+        var art = scene.art_texture("marble_%02d" % i)
+        if art == null or art.get_width() != 2048 or scene.skin_material(i).albedo_texture == null:
+            push_error("Smoke: HD marble material missing " + str(i))
+            quit(1)
+            return
+    if scene.art_texture("stone_normal") == null or scene.cloud_nodes.size() != 12 or not ResourceLoader.exists("res://assets/material_shaders/waterfall.gdshader"):
+        push_error("Smoke: enhanced environment missing")
+        quit(1)
+        return
+    print("HD_MATERIALS_OK")
     print("BRIDGE_AND_ROYAL_UI_OK")
     for language in ["ar","pt","en"]:
         scene.lang = language

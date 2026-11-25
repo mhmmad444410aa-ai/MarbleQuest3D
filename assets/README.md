@@ -7,3 +7,5 @@ Build imports only selected GLB/glTF meshes and their declared textures/buffers,
 UI sprites: Kenney UI Pack (https://kenney.nl/assets/ui-pack) and Game Icons (https://kenney.nl/assets/game-icons), CC0 1.0, pinned mirror shorepine/kenney@3694c6879e487c108f55677be7dd2ca75b07cc3b. Build fetches 18 selected PNGs and records hashes.
 Kenney UI Audio: https://kenney.nl/assets/ui-audio (CC0 1.0); one original click sound selected at build time and recorded in source.json. No music.
 Royal UI (1.2.0): original SVG artwork authored for this project, inspired by the approved stone/gold/emerald concept mockups. Separate stretch-safe button frames, joystick base and moving knob, and brake states. Kenney CC0 icons and sound retained. No mockup used as a flattened UI.
+
+1.2.1: twelve original 2048×1024 marble material maps, 1024×1024 stone albedo and relief normal map, original alpha cloud texture, animated waterfall shader and stone arch landmarks. Generated deterministically by tools/generate_materials.py; no paid assets or padding.
