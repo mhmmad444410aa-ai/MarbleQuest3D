@@ -30,7 +30,10 @@ func run() -> void:
     for language in ["ar","pt","en"]:
         scene.lang = language
         scene.update_language()
-        if scene.heading.text.is_empty():
+        await process_frame
+        scene.layout_ui()
+        await process_frame
+        if scene.heading.text.is_empty() or not scene.hud_panel.get_rect().encloses(scene.heading.get_rect()) or not scene.hud_panel.get_rect().encloses(scene.help.get_rect()) or not scene.menu_panel.get_rect().encloses(scene.menu_title.get_rect()) or not scene.menu_panel.get_rect().encloses(scene.menu_subtitle.get_rect()) or scene.pad.get_rect().intersects(scene.brake.get_rect()):
             quit(1)
             return
     scene.set_menu(true)

@@ -95,13 +95,13 @@ func make_environment() -> void:
     env.sky = sky
     env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
     env.ambient_light_color = Color("d5e6f2")
-    env.ambient_light_energy = 0.62
+    env.ambient_light_energy = 0.42
     world.environment = env
     add_child(world)
     var sun = DirectionalLight3D.new()
     sun.rotation_degrees = Vector3(-52, -32, 0)
     sun.light_color = Color("fff1cf")
-    sun.light_energy = 0.95
+    sun.light_energy = 0.72
     sun.shadow_enabled = true
     add_child(sun)
     camera = Camera3D.new()
@@ -155,7 +155,7 @@ func apply_palette(kind: String, root: Node3D) -> void:
         parts.push_front(root)
     var mat: StandardMaterial3D
     match kind:
-        "track": mat = palette_material("track", Color("c4aa7e"), 0.88, 0.0)
+        "track": mat = palette_material("track", Color("8a856e"), 0.88, 0.0)
         "ball": mat = palette_material("ball", Color("287c88"), 0.19, 0.38)
         "tree": mat = palette_material("tree", Color("416c54"), 0.88, 0.0)
         "marker": mat = palette_material("marker", Color("a34e30"), 0.58, 0.05)
@@ -179,7 +179,7 @@ func platform(pos: Vector3, size: Vector3, moving: bool = false) -> Node3D:
         body = StaticBody3D.new()
     course.add_child(body)
     body.position = pos
-    model("track", body, size, Vector3(0, -size.y*0.30, 0))
+    model("track", body, size, Vector3(0, -size.y*0.5, 0))
     collider(body, Vector3(size.x * 0.95, size.y, size.z), Vector3(0, -size.y/2, 0))
     return body
 
@@ -240,8 +240,8 @@ func reset_course() -> void:
     platform(Vector3(0,0,-5),Vector3(2.8,0.6,4))
     platform(Vector3(0,0,-9),Vector3(6,0.7,4))
     platform(Vector3(-3.55,0,-9),Vector3(2.4,0.65,3))
-    bridge = platform(Vector3(0,0,-13),Vector3(3.4,0.55,4.1),true) as AnimatableBody3D
-    platform(Vector3(0,0,-17),Vector3(5.4,0.7,4))
+    bridge = platform(Vector3(0,0,-13),Vector3(3.8,0.55,4.35),true) as AnimatableBody3D
+    platform(Vector3(0,0,-17),Vector3(5.4,0.7,4.35))
     platform(Vector3(0,0,-21),Vector3(3.8,0.7,4))
     platform(Vector3(0,0,-25),Vector3(5.2,0.7,4))
     decoration("tree",Vector3(-1.8,1.1,0),Vector3(1.0,2.2,1.0))
@@ -302,18 +302,18 @@ func _physics_process(delta: float) -> void:
         return
     elapsed += delta
     clock += delta
-    bridge.position.x = sin(clock * 1.2) * 1.05
+    bridge.position.x = sin(clock * 0.85) * 0.65
     blocker.position.x = sin(clock * 1.8) * 1.4
     var axis = move
     axis += Vector2(float(Input.is_physical_key_pressed(KEY_D))-float(Input.is_physical_key_pressed(KEY_A)),float(Input.is_physical_key_pressed(KEY_S))-float(Input.is_physical_key_pressed(KEY_W)))
     axis = axis.limit_length(1.0)
-    ball.apply_central_force(Vector3(axis.x,0,axis.y) * 16.0)
+    ball.apply_central_force(Vector3(axis.x,0,axis.y) * 13.5)
     var horizontal = Vector2(ball.linear_velocity.x,ball.linear_velocity.z)
-    if horizontal.length() > 5.5:
-        var limited = horizontal.limit_length(5.5)
+    if horizontal.length() > 4.7:
+        var limited = horizontal.limit_length(4.7)
         ball.linear_velocity = Vector3(limited.x,ball.linear_velocity.y,limited.y)
-    ball.linear_damp = 5.0 if braking else 0.4
-    ball.angular_damp = 4.0 if braking else 0.3
+    ball.linear_damp = 5.0 if braking else (1.6 if axis.length() < 0.08 else 0.45)
+    ball.angular_damp = 4.0 if braking else 0.4
     if ball.position.y < -5:
         falls += 1
         ball.linear_velocity = Vector3.ZERO
@@ -325,7 +325,7 @@ func _physics_process(delta: float) -> void:
     for a in orbs:
         if is_instance_valid(a):
             a.rotate_y(delta*1.6)
-    stats.text = "%s %d/3    •    %s %d    •    %s %ds" % [tr_word(3),count,tr_word(4),falls,tr_word(5),int(elapsed)]
+    stats.text = "%s %d/3  •  %s %d  •  %s %ds" % [tr_word(3),count,tr_word(4),falls,tr_word(5),int(elapsed)]
     if is_instance_valid(joystick_knob):
         joystick_knob.position = (pad.size - joystick_knob.size) * 0.5 + move * 54.0
     if gate.overlaps_body(ball) and count == 3:
@@ -360,12 +360,14 @@ func label(parent: Control, text_value: String, font_size: int, rect: Rect2) -> 
     var l = Label.new()
     parent.add_child(l)
     l.position = rect.position
-    l.size = rect.size
+    l.size = Vector2(maxf(rect.size.x,1.0),maxf(rect.size.y,1.0))
     l.text = text_value
     l.add_theme_font_size_override("font_size",font_size)
     l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-    l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    l.autowrap_mode = TextServer.AUTOWRAP_OFF
+    l.clip_text = true
+    l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     l.mouse_filter = Control.MOUSE_FILTER_IGNORE
     return l
 
@@ -413,9 +415,11 @@ func make_ui() -> void:
     hud.add_child(hud_panel)
     hud_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
     hud_panel.add_theme_stylebox_override("panel",panel_style(Color(0.06,0.15,0.17,0.89),Color("c1ac78"),22))
-    heading = label(hud,"",30,Rect2())
-    help = label(hud,"",20,Rect2())
-    stats = label(hud,"",22,Rect2())
+    heading = label(hud,"",34,Rect2())
+    help = label(hud,"",24,Rect2())
+    stats = label(hud,"",28,Rect2())
+    help.add_theme_color_override("font_color",Color("b5d3cd"))
+    heading.add_theme_color_override("font_color",Color("ffe4ae"))
     restart = button(hud,"",Rect2())
     restart.pressed.connect(func():
         if is_instance_valid(ball): reset_course())
@@ -434,6 +438,7 @@ func make_ui() -> void:
     brake.button_down.connect(func(): braking = true)
     brake.button_up.connect(func(): braking = false)
     result = label(hud,"",40,Rect2())
+    result.max_lines_visible = 3
     result.add_theme_color_override("font_color",Color("ffe198"))
     result.add_theme_color_override("font_outline_color",Color("173b4b"))
     result.add_theme_constant_override("outline_size",8)
@@ -448,10 +453,10 @@ func make_ui() -> void:
     menu_panel = Panel.new()
     menu.add_child(menu_panel)
     menu_panel.add_theme_stylebox_override("panel",panel_style(Color(0.06,0.14,0.16,0.94),Color("c1ac78"),32))
-    menu_title = label(menu,"",43,Rect2())
+    menu_title = label(menu,"",38,Rect2())
     menu_title.add_theme_color_override("font_color",Color("ffe4ae"))
-    menu_subtitle = label(menu,"",26,Rect2())
-    menu_hint = label(menu,"",20,Rect2())
+    menu_subtitle = label(menu,"",29,Rect2())
+    menu_hint = label(menu,"",25,Rect2())
     menu_play = button(menu,"",Rect2())
     menu_play.add_theme_font_size_override("font_size",32)
     menu_play.pressed.connect(func():
@@ -479,19 +484,19 @@ func layout_ui() -> void:
     var h = ui_root.size.y
     if w < 320 or h < 500: return
     var cx = w * 0.5
-    var pw = minf(w-36,620)
-    place(hud_panel,18,20,w-36,154)
-    place(heading,32,27,w-64,46)
-    place(stats,32,76,w-64,40)
-    place(help,32,116,w-64,44)
-    place(restart,20,188,146,52)
-    place(menu_button,w-166,188,146,52)
-    place(pad,24,h-252,216,216)
-    place(joystick_knob,69,69,78,78)
-    place(brake,w-174,h-155,150,104)
+    var pw = minf(w-36,680)
+    place(hud_panel,18,20,w-36,176)
+    place(heading,32,27,w-64,52)
+    place(stats,32,82,w-64,49)
+    place(help,32,134,w-64,48)
+    place(restart,20,208,164,66)
+    place(menu_button,w-184,208,164,66)
+    place(pad,28,h-278,232,232)
+    place(joystick_knob,77,77,78,78)
+    place(brake,w-204,h-185,176,130)
     place(result,24,h*0.38,w-48,190)
     place(play_again,cx-160,h*0.38+200,320,76)
-    var y = h*0.37
+    var y = minf(h*0.37,h-460)
     place(menu_panel,cx-pw*0.5,y,pw,420)
     place(menu_title,cx-pw*0.5+16,y+22,pw-32,104)
     place(menu_subtitle,cx-pw*0.5+16,y+132,pw-32,64)
@@ -513,11 +518,11 @@ func set_menu(open: bool) -> void:
 
 func update_language() -> void:
     heading.text = EXTRA[lang][1]
-    help.text = tr_word(2)
+    help.text = {"en":"Collect 3 orbs, reach the flag.","ar":"اجمع ٣ كرات ثم بلغ العلم.","pt":"Colete 3 orbes e alcance a bandeira."}[lang]
     restart.text = tr_word(6)
     brake.text = tr_word(7)
     play_again.text = tr_word(9)
-    menu_title.text = tr_word(0)
+    menu_title.text = {"en":"Marble Quest 3D","ar":"مغامرة الكرة 3D","pt":"Marble Quest 3D"}[lang]
     menu_subtitle.text = EXTRA[lang][2]
     menu_play.text = EXTRA[lang][0]
     menu_hint.text = EXTRA[lang][4]
@@ -526,6 +531,7 @@ func update_language() -> void:
     # Godot's text shaping still handles Arabic bidirectional text automatically.
     for c in [heading,help,stats,restart,brake,result,play_again,menu_title,menu_subtitle,menu_play,menu_hint,menu_button]:
         c.layout_direction = Control.LAYOUT_DIRECTION_LTR
+    layout_ui.call_deferred()
 
 func _input(event: InputEvent) -> void:
     if event is InputEventScreenTouch and not event.pressed and event.index == touch_id:
