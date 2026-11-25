@@ -170,6 +170,7 @@ ui_files={
     'play':'ui/UI Pack/Extra/icon_play_light.png',
     'repeat':'ui/UI Pack/Extra/icon_repeat_light.png',
 }
+ui_files.update({"adventure_brown":"ui/UI Pack - Adventure/Double/button_brown.png","adventure_grey":"ui/UI Pack - Adventure/Double/button_grey.png","adventure_red":"ui/UI Pack - Adventure/Double/button_red.png","adventure_panel":"ui/UI Pack - Adventure/Double/panel_brown_dark_corners_a.png","adventure_win":"ui/UI Pack - Adventure/Double/hexagon_grey_green.png","adventure_lose":"ui/UI Pack - Adventure/Double/hexagon_grey_red.png","fantasy_win":"ui/Fantasy UI Borders/Panel/panel-010.png","fantasy_lose":"ui/Fantasy UI Borders/Panel/panel-020.png","mobile_circle":"ui/Mobile Controls/Sprites/Style C/button_circle.png","mobile_retry":"ui/Mobile Controls/Sprites/Icons/icon_arrow_rotate.png","mobile_pause":"ui/Mobile Controls/Sprites/Icons/icon_pause.png"})
 for role,name in {'pause':'pause','stop':'stop','gear':'gear','shop':'shoppingCart','home':'home','back':'arrowLeft','gamepad':'gamepad','lock':'locked','check':'checkmark'}.items():
     ui_files[role]='icons/Game Icons/White/2x/'+name+'.png'
 ui_dir=ROOT/'assets'/'ui'

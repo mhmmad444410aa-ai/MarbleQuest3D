@@ -102,8 +102,9 @@ var sky_surface: ProceduralSkyMaterial
 
 var coins = 0
 var run_gold = 0
+var gust_zones: Array[Dictionary] = []
+var challenge_count = 0
 var effect_player: AudioStreamPlayer
-var rolling_player: AudioStreamPlayer
 var effects: Dictionary = {}
 var result_backdrop: Panel
 var result_symbol: TextureRect
@@ -584,6 +585,8 @@ func reset_course() -> void:
     secret_platform = null
     orbs.clear()
     stage_hazards.clear()
+    gust_zones.clear()
+    challenge_count = 0
     if is_instance_valid(result_tween): result_tween.kill()
     result.scale = Vector2.ONE
     result.visible = false
@@ -715,17 +718,23 @@ func build_route() -> void:
         route_points.append(Vector3(float(pair[0]),route_height(i),float(pair[1])))
     var theme = stage_index%12
     var width: float = [4.8,4.5,4.2,4.4,4.0,4.6,4.7,4.1,4.3,4.2,4.6,4.0][theme]
-    if stage_index>=6: width -= 0.20
-    if stage_index>=12: width -= 0.20
-    if stage_index>=18: width -= 0.15
+    # Keep junctions spacious enough to turn; bridge difficulty increases sharply.
+    if stage_index>=6: width -= 0.30
+    if stage_index>=12: width -= 0.30
+    if stage_index>=18: width -= 0.25
     for i in range(route_points.size()-1):
         var a: Vector3 = route_points[i]
         var b: Vector3 = route_points[i+1]
         stage_length += a.distance_to(b)
         var segment_width = float(width)
-        if theme in [4,7,9,11] and i%2==1: segment_width -= 0.35
-        var segment = connect_decks(a,b,segment_width,i%3==1)
+        var long_span = a.distance_to(b)>=7.8
+        if stage_index>=2 and long_span and i>=1:
+            segment_width = minf(segment_width,3.0 if stage_index<6 else (2.65 if stage_index<12 else (2.35 if stage_index<18 else 2.05)))
+        elif theme in [4,7,9,11] and i%2==1: segment_width -= 0.25
+        var segment = connect_decks(a,b,segment_width,i%3==1 and stage_index<6)
         if i==2: bridge=segment
+        if stage_index>=2 and long_span and i>=1:
+            add_challenge(a,b,segment_width,i)
     for i in range(route_points.size()):
         var point: Vector3 = route_points[i]
         var size = float(width)+0.85 if i>0 and i<route_points.size()-1 else 6.0
@@ -771,6 +780,42 @@ func build_route() -> void:
     if is_instance_valid(sky_surface):
         sky_surface.sky_top_color = Color(SKY_COLORS[theme])
         sky_surface.sky_horizon_color = Color(SKY_COLORS[theme]).lerp(Color.WHITE,0.38)
+
+func add_challenge(a: Vector3,b: Vector3,width: float,index: int) -> void:
+    # Pairs of real moving bumpers along exposed bridge edges and a crosswind
+    # corridor. Centre remains traversable with precise steering and braking.
+    var tangent = (b-a).normalized()
+    var side = Vector3(-tangent.z,0,tangent.x)
+    var middle = (a+b)*0.5
+    var intensity = 0.7+float(stage_index)*0.075
+    var sign_value = -1.0 if index%2==0 else 1.0
+    var hazard = AnimatableBody3D.new()
+    course.add_child(hazard)
+    hazard.position = middle+side*sign_value*(width*0.5-0.12)+Vector3(0,0.22,0)
+    hazard.set_meta("cross_origin",hazard.position)
+    hazard.set_meta("cross_side",side*sign_value)
+    hazard.set_meta("cross_phase",float(index)*1.7)
+    hazard.set_meta("cross_amplitude",minf(0.22,width*0.08))
+    var size = Vector3(0.42,0.52,0.48)
+    var mesh = BoxMesh.new()
+    mesh.size = size
+    attach_mesh(hazard,mesh,Vector3.ZERO,palette_material("hazard_copper",Color("b76a39"),0.42,0.35))
+    collider(hazard,size,Vector3.ZERO)
+    stage_hazards.append(hazard)
+    # Yellow edge beacons indicate the wind corridor before entering it.
+    for edge in [-1.0,1.0]:
+        var post = CylinderMesh.new()
+        post.top_radius = 0.09
+        post.bottom_radius = 0.15
+        post.height = 0.48
+        post.radial_segments = 8
+        var warning = palette_material("wind_beacon",Color("f4b74b"),0.40,0.28)
+        warning.emission_enabled = true
+        warning.emission = Color("c88324")
+        warning.emission_energy_multiplier = 0.55
+        attach_mesh(course,post,middle-tangent*1.35+side*edge*(width*0.5-0.08)+Vector3(0,0.22,0),warning)
+    gust_zones.append({"centre":middle,"direction":tangent,"side":side,"width":width,"force":intensity,"phase":float(index)*1.7})
+    challenge_count += 1
 
 func landmark_column(pos: Vector3,height: float,colour: Color) -> void:
     var column = Node3D.new()
@@ -879,13 +924,27 @@ func _physics_process(delta: float) -> void:
     clock += delta
     respawn_guard = maxf(0.0,respawn_guard-delta)
     for hazard in stage_hazards:
-        hazard.position.x = float(hazard.get_meta("origin_x")) + sin(clock * 1.45 + hazard.position.z)*0.24
+        if hazard.has_meta("cross_origin"):
+            var origin: Vector3 = hazard.get_meta("cross_origin")
+            var lateral: Vector3 = hazard.get_meta("cross_side")
+            var wave = sin(clock*2.2+float(hazard.get_meta("cross_phase")))
+            hazard.position = origin+lateral*wave*float(hazard.get_meta("cross_amplitude"))
+        else:
+            hazard.position.x = float(hazard.get_meta("origin_x")) + sin(clock * 1.45 + hazard.position.z)*0.24
     if is_instance_valid(secret_platform):
         secret_platform.position.y = secret_origin.y+sin(clock*1.4)*0.035
     var axis = move
     axis += Vector2(float(Input.is_physical_key_pressed(KEY_D))-float(Input.is_physical_key_pressed(KEY_A)),float(Input.is_physical_key_pressed(KEY_S))-float(Input.is_physical_key_pressed(KEY_W)))
     axis = axis.limit_length(1.0)
     ball.apply_central_force(Vector3(axis.x,0,axis.y) * (2.0 if braking else 13.5))
+    for zone in gust_zones:
+        var centre: Vector3 = zone["centre"]
+        var direction: Vector3 = zone["direction"]
+        var lateral: Vector3 = zone["side"]
+        var offset: Vector3 = ball.position-centre
+        if absf(offset.dot(direction))<1.55 and absf(offset.dot(lateral))<float(zone["width"])*0.5+0.2 and ball.position.y>centre.y and ball.position.y<centre.y+1.15:
+            var wind = sin(clock*1.65+float(zone["phase"]))*float(zone["force"])
+            ball.apply_central_force(lateral*wind*(0.35 if braking else 1.0))
     var horizontal = Vector2(ball.linear_velocity.x,ball.linear_velocity.z)
     if horizontal.length() > 4.7:
         var limited = horizontal.limit_length(4.7)
@@ -910,7 +969,7 @@ func finish_course() -> void:
     won = true
     ball.set_deferred("freeze", true)
     move = Vector2.ZERO
-    var target_time = stage_length/2.5+12.0
+    var target_time = stage_length/(2.5+float(stage_index)*0.025)+8.0
     var stars = mini(lives, 3 if elapsed <= target_time else 2)
     var record: Dictionary = stage_records.get(str(stage_index),{})
     var previous_time = float(record.get("time",0.0))
@@ -954,8 +1013,8 @@ func lose_attempt() -> void:
 
 func show_result() -> void:
     result_backdrop.visible = true
-    result_backdrop.add_theme_stylebox_override("panel",panel_style(Color("142d32") if won else Color("35252e"),Color("e9bd65") if won else Color("dc787e"),28))
-    result_symbol.texture = load("res://assets/royal_ui/victory.svg" if won else "res://assets/royal_ui/defeat.svg")
+    result_backdrop.add_theme_stylebox_override("panel",imported_style("fantasy_win" if won else "fantasy_lose",Color(0.75,0.72,0.65) if won else Color(0.72,0.52,0.54),false,true))
+    result_symbol.texture = tex("adventure_win" if won else "adventure_lose")
     result_symbol.visible = true
     result.visible = true
     result.pivot_offset = result.size*0.5
@@ -1147,20 +1206,34 @@ func button_surface(fill: Color,edge: Color,pressed: bool = false) -> StyleBoxFl
     style.shadow_offset = Vector2(0,2 if pressed else 4)
     return style
 
+func imported_style(key: String,tint: Color=Color.WHITE,round_shape: bool=false,frame: bool=false) -> StyleBox:
+    var texture = tex(key)
+    if texture==null: return texture_style("green_round" if round_shape else "green_rect",round_shape)
+    var style = StyleBoxTexture.new()
+    style.texture = texture
+    style.modulate_color = tint
+    if not round_shape:
+        var edge = minf(30.0,minf(texture.get_width(),texture.get_height())*0.32)
+        if frame: edge = minf(36.0,minf(texture.get_width(),texture.get_height())*0.37)
+        for side in [SIDE_LEFT,SIDE_TOP,SIDE_RIGHT,SIDE_BOTTOM]:
+            style.set_texture_margin(side,edge)
+            style.set_content_margin(side,12.0)
+    return style
+
 func skin_button(b: Button, theme_name: String, round_button: bool = false) -> void:
     if round_button:
         b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
-        b.add_theme_stylebox_override("normal",royal_style("round",true))
-        b.add_theme_stylebox_override("hover",royal_style("round",true))
-        b.add_theme_stylebox_override("pressed",royal_style("round",true))
-        b.add_theme_stylebox_override("disabled",royal_style("round",true))
+        b.add_theme_stylebox_override("normal",imported_style("mobile_circle",Color.WHITE,true))
+        b.add_theme_stylebox_override("hover",imported_style("mobile_circle",Color(1.12,1.12,1.12),true))
+        b.add_theme_stylebox_override("pressed",imported_style("mobile_circle",Color(0.72,0.72,0.72),true))
+        b.add_theme_stylebox_override("disabled",imported_style("mobile_circle",Color(0.5,0.5,0.5),true))
     else:
-        var fill = Color("254f4b") if theme_name=="green" else (Color("62483a") if theme_name=="gold" else (Color("67383d") if theme_name=="red" else Color("263940")))
-        var edge = Color("b99a60")
-        b.add_theme_stylebox_override("normal",button_surface(fill,edge))
-        b.add_theme_stylebox_override("hover",button_surface(fill.lightened(0.12),edge.lightened(0.12)))
-        b.add_theme_stylebox_override("pressed",button_surface(fill.darkened(0.18),edge,true))
-        b.add_theme_stylebox_override("disabled",button_surface(Color("343d42"),Color("627078")))
+        var key = "adventure_brown" if theme_name in ["green","gold"] else ("adventure_red" if theme_name=="red" else "adventure_grey")
+        var tint = Color(0.80,0.94,0.88) if theme_name=="green" else (Color(0.88,0.91,1.0) if theme_name=="grey" else Color.WHITE)
+        b.add_theme_stylebox_override("normal",imported_style(key,tint))
+        b.add_theme_stylebox_override("hover",imported_style(key,tint.lightened(0.12)))
+        b.add_theme_stylebox_override("pressed",imported_style(key,tint.darkened(0.23)))
+        b.add_theme_stylebox_override("disabled",imported_style("adventure_grey",Color(0.48,0.48,0.48)))
     b.add_theme_stylebox_override("focus",StyleBoxEmpty.new())
 
 func panel_style(bg: Color, line: Color, radius: int) -> StyleBoxFlat:
@@ -1182,7 +1255,7 @@ func make_page(key: String) -> Control:
     var panel = Panel.new()
     page.add_child(panel)
     panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    panel.add_theme_stylebox_override("panel",panel_style(Color(0.09,0.14,0.13,0.96),Color("d8b66b"),24))
+    panel.add_theme_stylebox_override("panel",imported_style("adventure_panel",Color(0.88,0.88,0.88),false,true))
     pages[key] = page
     page_panels[key] = panel
     var title = label(page,"",38,Rect2())
@@ -1205,17 +1278,9 @@ func make_ui() -> void:
         audio_player.stream = load("res://assets/ui/click.wav")
     effect_player = AudioStreamPlayer.new()
     add_child(effect_player)
-    rolling_player = AudioStreamPlayer.new()
-    add_child(rolling_player)
-    for key in ["pickup","bonus","win","fall","lose","roll"]:
+    for key in ["pickup","bonus","win","fall","lose"]:
         var path = "res://assets/ui/"+key+".wav"
         if ResourceLoader.exists(path): effects[key] = load(path)
-    if effects.has("roll"):
-        var rolling = effects["roll"] as AudioStreamWAV
-        rolling.loop_mode = AudioStreamWAV.LOOP_FORWARD
-        rolling.loop_begin = 0
-        rolling.loop_end = int(rolling.data.size()/2)
-        rolling_player.stream = rolling
     Engine.max_fps = fps
     var layer = CanvasLayer.new()
     add_child(layer)
@@ -1231,7 +1296,7 @@ func make_ui() -> void:
     hud_panel = Panel.new()
     hud.add_child(hud_panel)
     hud_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    hud_panel.add_theme_stylebox_override("panel",panel_style(Color(0.06,0.15,0.17,0.89),Color("c1ac78"),24))
+    hud_panel.add_theme_stylebox_override("panel",imported_style("adventure_panel",Color(0.84,0.84,0.84),false,true))
     heading = label(hud,"",32,Rect2())
     help = label(hud,"",22,Rect2())
     stats = label(hud,"",26,Rect2())
@@ -1246,12 +1311,12 @@ func make_ui() -> void:
         dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
         life_icons.append(dot)
     restart = button(hud,"",Rect2())
-    restart.icon = tex("repeat")
+    restart.icon = tex("mobile_retry")
     skin_button(restart,"grey",true)
     restart.pressed.connect(func():
         if is_instance_valid(ball): reset_course())
     menu_button = button(hud,"",Rect2())
-    menu_button.icon = tex("pause")
+    menu_button.icon = tex("mobile_pause")
     skin_button(menu_button,"green",true)
     menu_button.pressed.connect(func(): show_screen("pause"))
     pad = Panel.new()
@@ -1301,7 +1366,7 @@ func make_ui() -> void:
 
     menu = make_page("main")
     menu_panel = page_panels["main"]
-    menu_panel.add_theme_stylebox_override("panel",panel_style(Color(0.025,0.07,0.10,0.72),Color(0.60,0.77,0.78,0.42),32))
+    menu_panel.add_theme_stylebox_override("panel",imported_style("adventure_panel",Color(0.84,0.84,0.84),false,true))
     menu_title = page_titles["main"]
     menu_title.add_theme_font_size_override("font_size",54)
     menu_title.clip_text = false
@@ -1326,10 +1391,11 @@ func make_ui() -> void:
     action(menu,"achievements","check",func(): show_screen("achievements"),"grey")
     for key in ["play","levels","shop","settings","achievements"]:
         var b: Button = actions[key]
-        var style_key = "menu_"+key
-        b.add_theme_stylebox_override("normal",royal_style(style_key))
-        b.add_theme_stylebox_override("hover",royal_style(style_key))
-        b.add_theme_stylebox_override("pressed",royal_style("menu_down"))
+        var art_key = "adventure_brown" if key in ["play","levels"] else "adventure_grey"
+        var colour = Color(0.88,1.0,0.88) if key=="play" else (Color(0.83,0.93,1.0) if key=="shop" else Color.WHITE)
+        b.add_theme_stylebox_override("normal",imported_style(art_key,colour))
+        b.add_theme_stylebox_override("hover",imported_style(art_key,colour.lightened(0.12)))
+        b.add_theme_stylebox_override("pressed",imported_style(art_key,colour.darkened(0.25)))
         b.icon = load("res://assets/royal_ui/icon_"+key+".svg")
         b.add_theme_constant_override("icon_max_width",49)
         b.add_theme_constant_override("h_separation",18)
@@ -1462,8 +1528,8 @@ func layout_ui() -> void:
     var my = 24.0
     place(menu_panel,px,my,pw,mh)
     place(main_balance,bx,my+8,bw,44)
-    place(menu_title,px+10,my+62,pw-20,150)
-    place(menu_subtitle,px+12,my+211,pw-24,48)
+    place(menu_title,px+18,my+57,pw-36,158)
+    place(menu_subtitle,px+12,my+226,pw-24,44)
     var by = h*0.53
     var bh = clampf((h-by-88)/5.45,58,108)
     place(menu_play,bx,by,bw,bh)
@@ -1478,7 +1544,7 @@ func layout_ui() -> void:
     actions["levels"].add_theme_font_size_override("font_size",33)
     actions["shop"].add_theme_font_size_override("font_size",33)
     if screen == "main":
-        place(preview_box,px+pw*0.14,my+255,pw*0.72,maxf(100,by-my-265))
+        place(preview_box,px+pw*0.14,my+278,pw*0.72,maxf(95,by-my-292))
 
     var sh = 690.0
     var sy = maxf(20,(h-sh)*0.5)
@@ -1619,6 +1685,7 @@ func update_language() -> void:
     play_again.text = word(9)
     result_home.text = word(5)
     menu_title.text = {"en":"MARBLE\nQUEST 3D","ar":"مغامرة الكرة\nثلاثية الأبعاد","pt":"MARBLE\nQUEST 3D"}[lang]
+    menu_title.add_theme_font_size_override("font_size",42 if lang=="ar" else 54)
     menu_subtitle.text = EXTRA[lang][2]
     menu_hint.text = {"en":"Collect gold and finish the course to bank it.","ar":"اجمع الذهب وأكمل المرحلة لحفظه.","pt":"Colete ouro e conclua a fase para guardá-lo."}[lang]
     menu_play.text = word(0)
@@ -1798,15 +1865,6 @@ func refresh_preview() -> void:
         part.material_override = mat
 
 func _process(delta: float) -> void:
-    if is_instance_valid(rolling_player) and rolling_player.stream != null:
-        var speed = 0.0
-        if is_instance_valid(ball) and screen=="play" and not finished and sound_on and sound_volume>0.0 and absf(ball.linear_velocity.y)<1.8:
-            speed = Vector2(ball.linear_velocity.x,ball.linear_velocity.z).length()
-        if speed>0.18:
-            if not rolling_player.playing: rolling_player.play()
-            rolling_player.volume_db = linear_to_db(maxf(0.001,sound_volume*minf(speed/4.7,1.0)*0.27))
-            rolling_player.pitch_scale = 0.8+minf(speed/4.7,1.0)*0.4
-        elif rolling_player.playing: rolling_player.stop()
     if screen == "main" or screen == "play":
         visual_clock += delta
         for i in range(cloud_nodes.size()):

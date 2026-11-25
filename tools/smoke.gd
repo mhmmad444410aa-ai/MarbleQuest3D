@@ -43,7 +43,7 @@ func run() -> void:
         push_error("Smoke: actual bridge crossing failed at " + str(scene.ball.position))
         quit(1)
         return
-    if not ResourceLoader.exists("res://assets/royal_ui/joystick_base.svg") or not ResourceLoader.exists("res://assets/royal_ui/brake_active.svg") or scene.royal_textures.size() < 5:
+    if not ResourceLoader.exists("res://assets/royal_ui/joystick_base.svg") or not ResourceLoader.exists("res://assets/royal_ui/brake_active.svg") or scene.royal_textures.size() < 4:
         push_error("Smoke: royal UI artwork not imported")
         quit(1)
         return
@@ -58,6 +58,12 @@ func run() -> void:
         quit(1)
         return
     print("HD_MATERIALS_OK")
+    for key in ["adventure_brown","adventure_grey","adventure_red","adventure_panel","adventure_win","adventure_lose","fantasy_win","fantasy_lose","mobile_circle","mobile_retry","mobile_pause"]:
+        if scene.tex(key)==null:
+            push_error("Missing imported UI "+key)
+            quit(1)
+            return
+    print("IMPORTED_UI_OK")
     print("BRIDGE_AND_ROYAL_UI_OK")
     for language in ["ar","pt","en"]:
         scene.lang = language
@@ -113,7 +119,7 @@ func run() -> void:
     scene.owned.append(0)
     scene.equipped = 0
     scene.preview_index = 0
-    if scene.audio_player.stream == null or scene.effects.size()!=6 or scene.rolling_player.stream==null:
+    if scene.audio_player.stream == null or scene.effects.size()!=5 or scene.effects.has("roll"):
         push_error("Smoke: bundled UI click not loaded")
         quit(1)
         return
@@ -186,8 +192,12 @@ func run() -> void:
                     push_error("Blue bonus overlaps mandatory route "+str(stage+1))
                     quit(1)
                     return
+        if stage>=3 and scene.challenge_count<1:
+            push_error("Challenge course missing hazards "+str(stage+1))
+            quit(1)
+            return
         var waypoint = 1
-        for tick in range(4800):
+        for tick in range(5400):
             await physics_frame
             if scene.finished: break
             var target: Vector3 = scene.route_points[waypoint]
@@ -197,7 +207,7 @@ func run() -> void:
                 target=scene.route_points[waypoint]
                 error=Vector2(target.x-scene.ball.position.x,target.z-scene.ball.position.z)
             var velocity = Vector2(scene.ball.linear_velocity.x,scene.ball.linear_velocity.z)
-            scene.move = (error*0.8-velocity*0.32).limit_length(0.9)
+            scene.move = (error*0.8-velocity*0.40).limit_length(0.9)
         scene.move = Vector2.ZERO
         if not scene.won or scene.count != 3 or scene.falls != 0 or scene.lives != 3:
             push_error("Full route failed stage %d at %s waypoint %d pickups %d falls %d" % [stage+1,str(scene.ball.position),waypoint,scene.count,scene.falls])

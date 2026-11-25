@@ -29,5 +29,5 @@ def write(name,duration,kind):
     with wave.open(str(OUT/(name+'.wav')),'wb') as wav:
         wav.setnchannels(1);wav.setsampwidth(2);wav.setframerate(RATE)
         wav.writeframes(struct.pack('<'+'h'*len(data),*data))
-for name,duration in [('roll',1.3),('pickup',.26),('bonus',.4),('win',.85),('fall',.5),('lose',.8)]:
+for name,duration in [('pickup',.26),('bonus',.4),('win',.85),('fall',.5),('lose',.8)]:
     write(name,duration,name)
