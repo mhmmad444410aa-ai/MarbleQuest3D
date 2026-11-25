@@ -27,6 +27,27 @@ func run() -> void:
         push_error("Smoke: movement failed")
         quit(1)
         return
+    # Verify actual rolling through the widened moving bridge, not just scene load.
+    scene.ball.position = Vector3(0,1.3,-9)
+    scene.ball.linear_velocity = Vector3.ZERO
+    scene.ball.angular_velocity = Vector3.ZERO
+    for i in range(30):
+        await physics_frame
+    scene.move = Vector2(0,-0.8)
+    for i in range(240):
+        await physics_frame
+        if scene.ball.position.z < -16.5:
+            break
+    scene.move = Vector2.ZERO
+    if scene.ball.position.z >= -16.5 or scene.falls != 0 or scene.lives != 3:
+        push_error("Smoke: actual bridge crossing failed at " + str(scene.ball.position))
+        quit(1)
+        return
+    if not ResourceLoader.exists("res://assets/royal_ui/joystick_base.svg") or not ResourceLoader.exists("res://assets/royal_ui/brake_active.svg") or scene.royal_textures.size() < 5:
+        push_error("Smoke: royal UI artwork not imported")
+        quit(1)
+        return
+    print("BRIDGE_AND_ROYAL_UI_OK")
     for language in ["ar","pt","en"]:
         scene.lang = language
         scene.update_language()

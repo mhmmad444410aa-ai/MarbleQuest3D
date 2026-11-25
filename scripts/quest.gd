@@ -97,6 +97,8 @@ var preview_index = 0
 var preview_box: SubViewportContainer
 var preview_world: SubViewport
 var preview_mesh: Node3D
+var preview_pedestal: Node3D
+var royal_textures: Dictionary = {}
 var preview_caption: Label
 var achievement_text: Label
 var info_text: Label
@@ -248,7 +250,7 @@ func platform(pos: Vector3, size: Vector3, moving: bool = false) -> Node3D:
     course.add_child(body)
     body.position = pos
     model("track", body, size, Vector3(0, -size.y*0.5, 0))
-    collider(body, Vector3(size.x * 0.95, size.y, size.z), Vector3(0, -size.y/2, 0))
+    collider(body, size, Vector3(0, -size.y/2, 0))
     return body
 
 func decoration(kind: String, pos: Vector3, size: Vector3) -> void:
@@ -283,6 +285,8 @@ func orb(pos: Vector3) -> void:
     a.body_entered.connect(func(body):
         if body == ball and not a.is_queued_for_deletion():
             count += 1
+            if count == 2 and not checkpoint_active and ball.position.z < -7.0 and ball.position.z > -11.0:
+                spawn = Vector3(0,1.3,-9)
             a.queue_free())
     orbs.append(a)
 
@@ -313,13 +317,13 @@ func reset_course() -> void:
     brake.visible = true
     refresh_lives()
     platform(Vector3(0,0,0),Vector3(5,0.65,6))
-    platform(Vector3(0,0,-5),Vector3(2.8,0.6,4))
-    platform(Vector3(0,0,-9),Vector3(6,0.7,4))
-    platform(Vector3(-3.55,0,-9),Vector3(2.4,0.65,3))
-    bridge = platform(Vector3(0,0,-13),Vector3(3.8,0.55,4.35),true) as AnimatableBody3D
-    platform(Vector3(0,0,-17),Vector3(5.4,0.7,4.35))
-    platform(Vector3(0,0,-21),Vector3(3.8,0.7,4))
-    platform(Vector3(0,0,-25),Vector3(5.2,0.7,4))
+    platform(Vector3(0,0,-5),Vector3(3.4,0.6,4.35))
+    platform(Vector3(0,0,-9),Vector3(6.6,0.7,4.5))
+    platform(Vector3(-3.55,0,-9),Vector3(3.2,0.65,3.6))
+    bridge = platform(Vector3(0,0,-13),Vector3(4.6,0.55,4.75),true) as AnimatableBody3D
+    platform(Vector3(0,0,-17),Vector3(5.8,0.7,4.6))
+    platform(Vector3(0,0,-21),Vector3(4.8,0.7,4.4))
+    platform(Vector3(0,0,-25),Vector3(5.4,0.7,4.4))
     island_landscape()
     decoration("marker",Vector3(1.7,1.25,-17),Vector3(0.7,2.2,0.7))
     decoration("marker",Vector3(1.8,1.5,-25),Vector3(0.9,2.8,0.9))
@@ -328,14 +332,14 @@ func reset_course() -> void:
     orb(Vector3(0,0.7,-20))
     var cp = area_at(Vector3(0,0.8,-17),Vector3(3,1.6,2))
     cp.body_entered.connect(func(body):
-        if body == ball and not checkpoint_active:
+        if body == ball and count >= 2 and not checkpoint_active:
             spawn = Vector3(0,1.2,-17)
             checkpoint_active = true)
     blocker = AnimatableBody3D.new()
     course.add_child(blocker)
     blocker.position = Vector3(0,0.6,-22)
-    model("support",blocker,Vector3(2.1,0.8,0.55))
-    collider(blocker,Vector3(2.1,0.8,0.55),Vector3.ZERO)
+    model("support",blocker,Vector3(1.5,0.8,0.55))
+    collider(blocker,Vector3(1.5,0.8,0.55),Vector3.ZERO)
     gate = area_at(Vector3(0,0.8,-25),Vector3(3,1.6,2))
     gate.body_entered.connect(func(body):
         if body == ball and count == 3 and not finished:
@@ -359,6 +363,9 @@ func reset_course() -> void:
     col.shape = sphere
     ball.add_child(col)
     ball_visual = model("ball",ball,Vector3.ONE * 0.76)
+    ball.freeze = menu_open
+    brake_touch = -1
+    touch_id = -1
     apply_skin()
     camera.position = spawn + Vector3(0,8,8)
     camera.look_at(spawn + Vector3(0,0,-3))
@@ -406,7 +413,7 @@ func _physics_process(delta: float) -> void:
     elapsed += delta
     clock += delta
     respawn_guard = maxf(0.0,respawn_guard-delta)
-    bridge.position.x = sin(clock * 0.85) * 0.65
+    bridge.position.x = sin(clock * 0.85) * 0.40
     blocker.position.x = sin(clock * 1.8) * 1.4
     var axis = move
     axis += Vector2(float(Input.is_physical_key_pressed(KEY_D))-float(Input.is_physical_key_pressed(KEY_A)),float(Input.is_physical_key_pressed(KEY_S))-float(Input.is_physical_key_pressed(KEY_W)))
@@ -600,7 +607,10 @@ func button(parent: Control, caption: String, rect: Rect2) -> Button:
     b.add_theme_color_override("font_color",Color.WHITE)
     b.add_theme_color_override("font_hover_color",Color.WHITE)
     b.add_theme_color_override("font_pressed_color",Color.WHITE)
-    b.add_theme_color_override("font_disabled_color",Color("d1dad6"))
+    b.add_theme_color_override("font_disabled_color",Color("e1e5df"))
+    b.add_theme_color_override("font_outline_color",Color("151f1b"))
+    b.add_theme_constant_override("outline_size",4)
+    b.clip_text = true
     b.add_theme_constant_override("icon_max_width",35)
     b.add_theme_constant_override("h_separation",12)
     b.layout_direction = Control.LAYOUT_DIRECTION_LTR
@@ -608,19 +618,36 @@ func button(parent: Control, caption: String, rect: Rect2) -> Button:
     b.pressed.connect(play_ui_sound)
     return b
 
+func royal_style(key: String, round_button: bool = false) -> StyleBox:
+    if not royal_textures.has(key):
+        var path = "res://assets/royal_ui/" + key + ".svg"
+        if ResourceLoader.exists(path):
+            royal_textures[key] = load(path)
+    var image = royal_textures.get(key) as Texture2D
+    if image == null:
+        return texture_style("green_round" if round_button else "green_rect",round_button)
+    var style = StyleBoxTexture.new()
+    style.texture = image
+    for side in [SIDE_LEFT,SIDE_TOP,SIDE_RIGHT,SIDE_BOTTOM]:
+        style.set_content_margin(side, 0.0 if round_button else 12.0)
+        if not round_button:
+            style.set_texture_margin(side, 42.0 if side == SIDE_LEFT or side == SIDE_RIGHT else 16.0)
+    return style
+
 func skin_button(b: Button, theme_name: String, round_button: bool = false) -> void:
-    var name = theme_name + ("_round" if round_button else "_rect")
-    b.add_theme_stylebox_override("normal",texture_style(name,round_button))
-    b.add_theme_stylebox_override("hover",texture_style(name,round_button))
-    b.add_theme_stylebox_override("pressed",texture_style("grey"+("_round" if round_button else "_rect"),round_button))
-    b.add_theme_stylebox_override("disabled",texture_style("grey"+("_round" if round_button else "_rect"),round_button))
+    var key = "emerald" if theme_name == "green" else ("red" if theme_name == "red" else ("gold" if theme_name == "gold" else "stone"))
+    if round_button: key = "round"
+    b.add_theme_stylebox_override("normal",royal_style(key,round_button))
+    b.add_theme_stylebox_override("hover",royal_style(key,round_button))
+    b.add_theme_stylebox_override("pressed",royal_style(key if round_button else "pressed",round_button))
+    b.add_theme_stylebox_override("disabled",royal_style(key if round_button else "disabled",round_button))
     b.add_theme_stylebox_override("focus",StyleBoxEmpty.new())
 
 func panel_style(bg: Color, line: Color, radius: int) -> StyleBoxFlat:
     var style = StyleBoxFlat.new()
     style.bg_color = bg
     style.border_color = line
-    style.set_border_width_all(2)
+    style.set_border_width_all(3)
     style.set_corner_radius_all(radius)
     style.shadow_color = Color(0.02,0.08,0.09,0.35)
     style.shadow_size = 6
@@ -635,7 +662,7 @@ func make_page(key: String) -> Control:
     var panel = Panel.new()
     page.add_child(panel)
     panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    panel.add_theme_stylebox_override("panel",panel_style(Color(0.045,0.12,0.14,0.96),Color("bca778"),30))
+    panel.add_theme_stylebox_override("panel",panel_style(Color(0.09,0.14,0.13,0.96),Color("d8b66b"),24))
     pages[key] = page
     page_panels[key] = panel
     var title = label(page,"",38,Rect2())
@@ -696,17 +723,19 @@ func make_ui() -> void:
     menu_button.pressed.connect(func(): show_screen("pause"))
     pad = Panel.new()
     hud.add_child(pad)
-    pad.add_theme_stylebox_override("panel",texture_style("grey_round",true))
-    pad.modulate = Color(0.65,0.88,0.89,0.90)
+    pad.add_theme_stylebox_override("panel",royal_style("joystick_base",true))
+    pad.modulate = Color(1,1,1,0.94)
     joystick_knob = Panel.new()
     pad.add_child(joystick_knob)
     joystick_knob.mouse_filter = Control.MOUSE_FILTER_IGNORE
     joystick_knob.size = Vector2(78,78)
-    joystick_knob.add_theme_stylebox_override("panel",texture_style("green_round",true))
+    joystick_knob.add_theme_stylebox_override("panel",royal_style("joystick_knob",true))
     pad.gui_input.connect(pad_input)
     brake = button(hud,"",Rect2())
-    brake.icon = tex("stop")
     skin_button(brake,"red",true)
+    brake.add_theme_stylebox_override("normal",royal_style("brake_idle",true))
+    brake.add_theme_stylebox_override("hover",royal_style("brake_idle",true))
+    brake.add_theme_stylebox_override("pressed",royal_style("brake_active",true))
     brake.button_down.connect(func(): braking = true; play_ui_sound())
     brake.button_up.connect(func(): braking = brake_touch >= 0)
     result = label(hud,"",36,Rect2())
@@ -722,7 +751,13 @@ func make_ui() -> void:
 
     menu = make_page("main")
     menu_panel = page_panels["main"]
+    menu_panel.add_theme_stylebox_override("panel",StyleBoxEmpty.new())
     menu_title = page_titles["main"]
+    menu_title.add_theme_font_size_override("font_size",54)
+    menu_title.add_theme_color_override("font_outline_color",Color("182a20"))
+    menu_title.add_theme_constant_override("outline_size",12)
+    menu_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    menu_title.max_lines_visible = 2
     menu_subtitle = label(menu,"",28,Rect2())
     menu_hint = label(menu,"",20,Rect2())
     main_balance = label(menu,"",25,Rect2())
@@ -735,7 +770,7 @@ func make_ui() -> void:
     action(menu,"settings","gear",func():
         settings_return = "main"
         show_screen("settings"),"grey")
-    action(menu,"levels","play",func(): show_screen("levels"),"grey")
+    action(menu,"levels","play",func(): show_screen("levels"),"gold")
     action(menu,"achievements","check",func(): show_screen("achievements"),"grey")
 
     var store = make_page("shop")
@@ -850,25 +885,32 @@ func layout_ui() -> void:
     place(result,24,h*0.35,w-48,185)
     place(play_again,cx-160,h*0.35+190,320,80)
     place(result_home,cx-160,h*0.35+282,320,74)
-    var mh = 710.0
-    var my = clampf(h*0.23,24,h-mh-24)
+    var mh = h-48.0
+    var my = 24.0
     place(menu_panel,px,my,pw,mh)
-    place(menu_title,px+12,my+20,pw-24,70)
-    place(menu_subtitle,px+16,my+92,pw-32,50)
-    place(main_balance,bx,my+144,bw,45)
-    place(menu_play,bx,my+205,bw,100)
-    place(actions["shop"],bx,my+320,bw,82)
-    place(actions["settings"],bx,my+416,bw,82)
-    place(actions["levels"],bx,my+510,bw*0.49,80)
-    place(actions["achievements"],bx+bw*0.51,my+510,bw*0.49,80)
-    place(menu_hint,bx,my+616,bw,40)
+    place(main_balance,bx,my+8,bw,44)
+    place(menu_title,px+10,my+64,pw-20,140)
+    place(menu_subtitle,px+12,my+206,pw-24,48)
+    var by = h*0.57
+    var bh = clampf((h-by-72)/4.3,56,108)
+    place(menu_play,bx,by,bw,bh)
+    place(actions["levels"],bx,by+bh*1.08,bw,bh)
+    place(actions["shop"],bx,by+bh*2.16,bw,bh)
+    place(actions["settings"],bx,by+bh*3.24,bw*0.49,bh)
+    place(actions["achievements"],bx+bw*0.51,by+bh*3.24,bw*0.49,bh)
+    place(menu_hint,bx,by+bh*4.24,bw,35)
+    actions["settings"].add_theme_font_size_override("font_size",22)
+    actions["achievements"].add_theme_font_size_override("font_size",22)
+    if screen == "main":
+        place(preview_box,px+pw*0.12,my+254,pw*0.76,maxf(100,by-my-264))
 
     var sh = 690.0
     var sy = maxf(20,(h-sh)*0.5)
     place(page_panels["shop"],px,sy,pw,sh)
     place(page_titles["shop"],px+10,sy+15,pw-20,60)
     place(balance_label,bx,sy+78,bw,48)
-    place(preview_box,px+pw*0.15,sy+135,pw*0.70,280)
+    if screen == "shop":
+        place(preview_box,px+pw*0.15,sy+135,pw*0.70,280)
     place(preview_caption,bx,sy+414,bw,60)
     place(actions["previous"],bx,sy+230,68,68)
     place(actions["next"],bx+bw-68,sy+230,68,68)
@@ -924,7 +966,13 @@ func show_screen(next: String) -> void:
             ball.angular_velocity = last_spin
             pause_snapshot = false
     if is_instance_valid(preview_world):
-        preview_world.render_target_update_mode = SubViewport.UPDATE_ALWAYS if next == "shop" else SubViewport.UPDATE_DISABLED
+        if next in ["main","shop"]:
+            var target_page: Control = pages[next]
+            if preview_box.get_parent() != target_page:
+                preview_box.reparent(target_page,false)
+        preview_world.render_target_update_mode = SubViewport.UPDATE_ALWAYS if next in ["main","shop"] else SubViewport.UPDATE_DISABLED
+        if is_instance_valid(preview_pedestal): preview_pedestal.visible = next == "main"
+        layout_ui.call_deferred()
     if next == "achievements": refresh_achievements()
     if next == "shop" or next == "main": refresh_shop()
     if next == "settings": update_language()
@@ -971,7 +1019,12 @@ func update_language() -> void:
     help.text = {"en":"Collect 3 orbs, reach the flag.","ar":"اجمع ٣ كرات ثم بلغ العلم.","pt":"Colete 3 orbes e alcance a bandeira."}[lang]
     restart.text = ""
     menu_button.text = ""
-    brake.text = word(29)
+    brake.text = ""
+    brake.tooltip_text = word(29)
+    menu_button.tooltip_text = word(3)
+    for b in [menu_title,menu_subtitle,main_balance,menu_hint]:
+        b.add_theme_color_override("font_outline_color",Color("142a24"))
+        b.add_theme_constant_override("outline_size",7)
     play_again.text = word(9)
     result_home.text = word(5)
     menu_title.text = {"en":"Marble Quest 3D","ar":"مغامرة الكرة 3D","pt":"Marble Quest 3D"}[lang]
@@ -1092,10 +1145,12 @@ func setup_preview() -> void:
     root.add_child(env_node)
     var cam = Camera3D.new()
     root.add_child(cam)
-    cam.position = Vector3(0,0.8,4.0)
+    cam.position = Vector3(0,1.05,4.8)
     cam.look_at(Vector3.ZERO)
     cam.current = true
     preview_mesh = model("ball",root,Vector3.ONE*2.1)
+    preview_pedestal = model("track",root,Vector3(2.55,0.35,2.55),Vector3(0,-1.19,0))
+    preview_pedestal.visible = screen == "main"
     refresh_preview()
 
 func select_preview(delta: int) -> void:
@@ -1104,15 +1159,17 @@ func select_preview(delta: int) -> void:
 
 func refresh_preview() -> void:
     if not is_instance_valid(preview_mesh): return
-    var mat = skin_material(preview_index)
+    var mat = skin_material(equipped if screen == "main" else preview_index)
     for part in preview_mesh.find_children("*","MeshInstance3D",true,false):
         part.material_override = mat
 
 func _process(delta: float) -> void:
-    if is_instance_valid(preview_mesh) and screen == "shop":
+    if is_instance_valid(preview_mesh) and screen in ["shop","main"]:
         preview_mesh.rotate_y(delta*0.7)
     if is_instance_valid(ball_visual) and screen == "main":
         ball_visual.rotate_y(delta*0.45)
+    if is_instance_valid(brake):
+        brake.modulate = Color(1.15,1.15,1.15) if braking else Color.WHITE
     if is_instance_valid(joystick_knob) and not menu_open and not finished:
         var target = (pad.size-joystick_knob.size)*0.5+move*54.0
         joystick_knob.position = joystick_knob.position.lerp(target,1.0-exp(-delta*20.0))
