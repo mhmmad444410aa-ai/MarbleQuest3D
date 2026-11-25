@@ -191,19 +191,12 @@ source_path.write_text(json.dumps(metadata,indent=2))
 print('UI assets:',len(ui_hashes),flush=True)
 
 
-# Original CC0 UI click, from the already documented Kenney UI Audio pack.
-audio_zip,audio_url=fetch_zip([
-    'https://kenney.nl/media/pages/assets/ui-audio/490d233f68-1677590494/kenney_ui-audio.zip',
-    'https://opengameart.org/sites/default/files/kenney_ui-audio.zip'
-],cap=8_000_000)
-audio_archive=zipfile.ZipFile(io.BytesIO(audio_zip))
-sounds=sorted(n for n in audio_archive.namelist() if n.lower().endswith('.ogg') and 'click' in Path(n).stem.lower())
-if not sounds:
-    sounds=sorted(n for n in audio_archive.namelist() if n.lower().endswith('.ogg'))
-if not sounds:
-    raise SystemExit('Kenney UI Audio contains no OGG')
-raw=audio_archive.read(sounds[0])
-if not raw.startswith(b'OggS'): raise SystemExit('Invalid OGG')
-(ui_dir/'click.ogg').write_bytes(raw)
-metadata['audio']={'author':'Kenney','license':'CC0-1.0','source':audio_url,'selected':sounds[0],'sha256':hashlib.sha256(raw).hexdigest()}
+# Vendored original Kenney CC0 click; no network dependency for audio.
+import base64
+raw=base64.b64decode((ROOT/'tools'/'kenney_click5.b64').read_text(),validate=False)
+assert raw[:4]==b'RIFF' and raw[8:12]==b'WAVE'
+assert hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()=='6e907ee72e0590c6d2966d77dbeceed03aef46b0', 'Audio integrity mismatch'
+(ui_dir/'click.wav').write_bytes(raw)
+metadata['audio']={'author':'Kenney','license':'CC0-1.0','source':'https://github.com/Calinou/kenney-ui-audio/blob/8c3d81b9159d058c444f89d12d518276b0b09345/addons/kenney_ui_audio/click5.wav','selected':'click5.wav','sha256':hashlib.sha256(raw).hexdigest()}
 source_path.write_text(json.dumps(metadata,indent=2))
+print('Vendored CC0 audio verified',flush=True)

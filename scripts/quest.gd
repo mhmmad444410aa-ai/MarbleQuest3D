@@ -654,8 +654,8 @@ func action(parent: Control, key: String, icon_name: String, callback: Callable,
 func make_ui() -> void:
     audio_player = AudioStreamPlayer.new()
     add_child(audio_player)
-    if ResourceLoader.exists("res://assets/ui/click.ogg"):
-        audio_player.stream = load("res://assets/ui/click.ogg")
+    if ResourceLoader.exists("res://assets/ui/click.wav"):
+        audio_player.stream = load("res://assets/ui/click.wav")
     Engine.max_fps = fps
     var layer = CanvasLayer.new()
     add_child(layer)
