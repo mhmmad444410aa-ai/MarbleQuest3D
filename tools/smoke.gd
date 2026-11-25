@@ -54,15 +54,30 @@ func run() -> void:
     if not scene.menu_open or not scene.ball.freeze or not scene.pages["pause"].visible:
         quit(1)
         return
+    var paused_time = scene.elapsed
+    for i in range(4):
+        await physics_frame
+    if scene.elapsed != paused_time:
+        quit(1)
+        return
     scene.show_screen("settings")
     if not scene.pages["settings"].visible or scene.pages["pause"].visible:
         quit(1)
         return
     scene.show_screen("shop")
-    if not scene.pages["shop"].visible or scene.shop_buttons.size()!=4:
+    if not scene.pages["shop"].visible or scene.shop_buttons.size()!=12:
         quit(1)
         return
     scene.coins = 200
+    scene.owned = [0]
+    scene.select_preview(11)
+    if scene.preview_index != 11 or not is_instance_valid(scene.preview_mesh):
+        quit(1)
+        return
+    scene.select_preview(1)
+    if scene.preview_index != 0:
+        quit(1)
+        return
     scene.buy_or_equip(1)
     if scene.coins != 140 or not scene.owned.has(1) or scene.equipped != 1:
         quit(1)
@@ -73,12 +88,14 @@ func run() -> void:
         return
     scene.show_screen("play")
     for i in range(3):
+        scene.respawn_guard = 0.0
         scene.lose_attempt()
         await process_frame
         if scene.lives != 2-i:
             quit(1)
             return
-    if not scene.finished or scene.won or not scene.result.visible:
+    scene.lose_attempt()
+    if scene.lives != 0 or not scene.finished or scene.won or not scene.result.visible:
         quit(1)
         return
     scene.reset_course()

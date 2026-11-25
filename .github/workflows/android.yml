@@ -51,6 +51,7 @@ jobs:
       - name: Smoke test
         run: |
           set -euo pipefail
+          export XDG_DATA_HOME="$RUNNER_TEMP/godot-smoke-data"
           timeout 120 godot --headless --path . --script tools/smoke.gd 2>&1 | tee smoke.log
           grep -q SMOKE_OK smoke.log
           if grep -E 'SCRIPT ERROR|Parse Error' import.log smoke.log; then exit 1; fi
