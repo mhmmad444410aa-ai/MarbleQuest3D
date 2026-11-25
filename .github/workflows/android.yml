@@ -104,6 +104,13 @@ jobs:
             assets/source.json
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: MarbleQuest3D-APK-only
+          path: build/MarbleQuest3D-prototype.apk
+          compression-level: 0
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: prototype-diagnostics
@@ -111,3 +118,29 @@ jobs:
             import.log
             smoke.log
           if-no-files-found: ignore
+
+  direct-apk:
+    name: Publish direct APK
+    needs: prototype
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: MarbleQuest3D-APK-only
+          path: release
+      - name: Verify and publish test APK without ZIP
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd release
+          mv MarbleQuest3D-prototype.apk MarbleQuest3D.apk
+          unzip -tq MarbleQuest3D.apk
+          sha256sum MarbleQuest3D.apk > SHA256SUMS.txt
+          tag="test-apk-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          gh release create "$tag" MarbleQuest3D.apk SHA256SUMS.txt --target "$GITHUB_SHA" --prerelease --title "Marble Quest 3D - verified test APK" --notes "Direct Android APK from a successful build and automated smoke test. Test builds may use a different signing certificate from previous builds; not a production store release."
+          gh release view "$tag" --json url,assets
