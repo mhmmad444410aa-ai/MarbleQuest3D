@@ -1,7 +1,2 @@
-# Store release candidate 1.7.1
-This workflow is triggered manually or when its own definition changes on main and fails closed without all four signing secrets or the accessible privacy page. It never generates a temporary key. Use an existing production keystore if one was previously used for com.mhmmad.marblequest3d. Otherwise use a newly generated permanent key kept offline. Do not commit credentials.
-
-1. In Settings > Secrets and variables > Actions add ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD.
-2. The public rendered Markdown policy is https://github.com/mhmmad444410aa-ai/MarbleQuest3D/blob/main/docs/PRIVACY.md. The workflow verifies its availability and content; GitHub Pages is optional.
-3. Actions > Store Release APK (stable signing) > Run workflow. Check 24 course tests, package ID, signature, privacy and artifact. The APK is a store candidate, not a store acceptance guarantee.
-4. Install and test on Android devices, review screenshots and store metadata. Current edition is offline and contains no advertising or analytics. Huawei Ads requires a separate integration and updated privacy/consent before distribution.
+# Store Release 1.7.2
+Permanent signing secrets and certificate unchanged. Build uses Godot 4.6.3 Android Gradle template with Petal Ads 3.4.91.300. Banner on level selection; interstitial on completed levels after three wins, at least 120 seconds between shown ads. No startup choice. Consent check fails closed; unknown required consent results in no ads. Nonpersonalized and W content only. Interstitial video starts muted. Configure category exclusions in Petal Ads console separately; client rating cannot guarantee religious compliance. No location permission. Use official test IDs only in separate test builds; never click live ads in testing. Device testing still required. Privacy: https://github.com/mhmmad444410aa-ai/MarbleQuest3D/blob/main/docs/PRIVACY.md

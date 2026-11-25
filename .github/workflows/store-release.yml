@@ -9,7 +9,7 @@ permissions:
 jobs:
   prototype:
     runs-on: ubuntu-latest
-    timeout-minutes: 55
+    timeout-minutes: 70
     env:
       GODOT_VERSION: 4.6.3
     steps:
@@ -62,7 +62,7 @@ jobs:
           echo "$sdk/platform-tools" >> "$GITHUB_PATH"
           echo "$sdk/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
           "$manager" --sdk_root="$sdk" --version
-          "$manager" --sdk_root="$sdk" 'platform-tools' 'platforms;android-35' 'build-tools;35.0.1' 'platforms;android-36' 'build-tools;36.0.0'
+          "$manager" --sdk_root="$sdk" 'platform-tools' 'platforms;android-35' 'build-tools;35.0.1' 'platforms;android-36' 'build-tools;36.0.0' 'build-tools;36.1.0' 'ndk;29.0.14206865'
           test -x "$sdk/build-tools/35.0.1/apksigner"
       - name: Fetch official Godot and matching templates
         run: |
@@ -77,6 +77,8 @@ jobs:
           cp -a /tmp/templates/templates/. "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
           printf '[gd_resource type="EditorSettings" format=3]\n[resource]\nexport/android/android_sdk_path = "%s"\nexport/android/java_sdk_path = "%s"\n' "$ANDROID_HOME" "$JAVA_HOME" > "$HOME/.config/godot/editor_settings-4.6.tres"
           godot --version
+      - name: Prepare official Gradle template with Petal Ads
+        run: python3 tools/android/prepare_template.py "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/android_source.zip"
       - name: Fetch licensed original assets
         run: python3 tools/fetch_assets.py
       - uses: actions/setup-python@v5
@@ -124,9 +126,20 @@ jobs:
           grep -Fq 'Signer #1 certificate SHA-256 digest: 4770a2920faf64fa7a3d285e1b93513e840ce0c0cda13cc2541bf7e424135a09' build/certificate.txt
           "$bt/aapt" dump badging build/MarbleQuest3D-release.apk > build/badging.txt
           grep -Fq "package: name='$expected'" build/badging.txt
-          grep -Fq "versionCode='14'" build/badging.txt
-          grep -Fq "versionName='1.7.1'" build/badging.txt
-          if grep -q "uses-permission: name='android.permission.INTERNET'" build/badging.txt; then echo "::error::Offline policy mismatch"; exit 1; fi
+          grep -Fq "versionCode='15'" build/badging.txt
+          grep -Fq "versionName='1.7.2'" build/badging.txt
+          grep -Fq "uses-permission: name='android.permission.INTERNET'" build/badging.txt
+          if grep -Eq "uses-permission: name='android.permission.ACCESS_(FINE|COARSE|BACKGROUND)_LOCATION'" build/badging.txt; then echo "::error::Unexpected location permission"; exit 1; fi
+          "$bt/aapt" dump xmltree build/MarbleQuest3D-release.apk AndroidManifest.xml > build/manifest.txt
+          grep -Fq 'org.godotengine.plugin.v2.MarbleAds' build/manifest.txt
+          "$bt/dexdump" -h /dev/null >/dev/null 2>&1 || true
+          python3 - <<'PY'
+          from zipfile import ZipFile
+          with ZipFile('build/MarbleQuest3D-release.apk') as z:
+              dex = b''.join(z.read(n) for n in z.namelist() if n.startswith('classes') and n.endswith('.dex'))
+              for name in [b'Lcom/mhmmad/marblequest3d/ads/MarbleAds;', b'Lcom/huawei/hms/ads/banner/BannerView;', b'Lcom/huawei/hms/ads/InterstitialAd;', b'n7ud5bb79m', b'z8ba3a562q']:
+                  assert name in dex, f'Missing ads integration: {name!r}'
+          PY
           if grep -q "application-debuggable" build/badging.txt; then echo "::error::Debuggable APK"; exit 1; fi
           cat build/badging.txt | grep -E '^(package:|sdkVersion:|targetSdkVersion:|native-code:)'
           "$bt/zipalign" -c -P 16 4 build/MarbleQuest3D-release.apk
@@ -185,6 +198,6 @@ jobs:
           mv MarbleQuest3D-release.apk MarbleQuest3D.apk
           unzip -tq MarbleQuest3D.apk
           sha256sum MarbleQuest3D.apk > SHA256SUMS.txt
-          tag="store-candidate-1.7.1-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          gh release create "$tag" MarbleQuest3D.apk SHA256SUMS.txt --target "$GITHUB_SHA" --prerelease --title "Marble Quest 3D 1.7.1 - signed store candidate" --notes "Permanent signing secrets used. Offline, ad-free candidate. Automated checks passed; install and visual/device testing required before submission. Privacy: https://github.com/mhmmad444410aa-ai/MarbleQuest3D/blob/main/docs/PRIVACY.md"
+          tag="store-candidate-1.7.2-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          gh release create "$tag" MarbleQuest3D.apk SHA256SUMS.txt --target "$GITHUB_SHA" --prerelease --title "Marble Quest 3D 1.7.2 - signed store candidate" --notes "Permanent signing secrets used. Petal Ads Banner and Interstitial, non-personalized requests. Automated checks passed; install and visual/device testing required before submission. Privacy: https://github.com/mhmmad444410aa-ai/MarbleQuest3D/blob/main/docs/PRIVACY.md"
           gh release view "$tag" --json url,assets

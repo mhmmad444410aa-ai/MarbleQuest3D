@@ -1032,6 +1032,9 @@ func show_result() -> void:
     pad.visible = false
     brake.visible = false
     refresh_shop()
+    ads_screen("result")
+    if won and OS.get_name() == "Android" and Engine.has_singleton("MarbleAds"):
+        Engine.get_singleton("MarbleAds").levelCompleted()
 
 func apply_skin() -> void:
     if not is_instance_valid(ball): return
@@ -1584,8 +1587,10 @@ func layout_ui() -> void:
             place(info_text,bx,py2+105,bw,245)
             place(actions["privacy_policy"],bx,py2+360,bw,62)
 
-    var lh = minf(h-48,820.0)
-    var ly = (h-lh)*0.5
+    # Reserve bottom space for the Android banner, away from level controls.
+    var ad_space = h*0.17 if screen == "levels" and OS.get_name() == "Android" and Engine.has_singleton("MarbleAds") else 0.0
+    var lh = minf(h-48-ad_space,820.0)
+    var ly = (h-ad_space-lh)*0.5
     place(page_panels["levels"],px,ly,pw,lh)
     place(page_titles["levels"],px+12,ly+15,pw-24,68)
     var step = (lh-230.0)/6.0
@@ -1602,12 +1607,17 @@ func layout_ui() -> void:
     for i in range(4):
         place(actions[["resume","pause_restart","pause_settings","pause_home"][i]],bx,py+110+i*96,bw,80)
 
+func ads_screen(next: String) -> void:
+    if OS.get_name() == "Android" and Engine.has_singleton("MarbleAds"):
+        Engine.get_singleton("MarbleAds").setScreen(next)
+
 func show_screen(next: String) -> void:
     if screen == "play" and next != "play" and is_instance_valid(ball) and not finished:
         last_velocity = ball.linear_velocity
         last_spin = ball.angular_velocity
         pause_snapshot = true
     screen = next
+    ads_screen(next)
     menu_open = next != "play"
     hud.visible = next == "play"
     for key in pages:
