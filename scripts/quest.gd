@@ -99,6 +99,15 @@ var level_buttons: Array[Button] = []
 var sky_surface: ProceduralSkyMaterial
 
 var coins = 0
+var run_gold = 0
+var effect_player: AudioStreamPlayer
+var rolling_player: AudioStreamPlayer
+var effects: Dictionary = {}
+var result_backdrop: Panel
+var result_symbol: TextureRect
+var result_tween: Tween
+var gold_flash: Label
+var gold_tween: Tween
 var owned: Array[int] = [0]
 var equipped = 0
 var quality = 1
@@ -123,7 +132,7 @@ var result_home: Button
 var quality_button: Button
 var vibration_button: Button
 var ui_textures: Dictionary = {}
-const PRICES = [0,60,120,200,240,280,320,360,400,440,480,520]
+const PRICES = [0,650,1100,1650,2400,3400,4800,6500,8500,11000,14500,19000]
 const SKINS = [Color("287c88"),Color("ce983b"),Color("885ac7"),Color("e1e7ef"),Color("bd3449"),Color("355bb8"),Color("168e64"),Color("242c3b"),Color("a0b7d7"),Color("b66f42"),Color("e6d5c2"),Color("674b9b")]
 const SKIN_NAMES = {
  "en":["Jade","Golden","Amethyst","Frost","Ruby","Sapphire","Emerald","Obsidian","Crystal","Copper","Marble","Galaxy"],
@@ -191,6 +200,10 @@ func _ready() -> void:
             help.text = tr_word(11)
             return
         packed[key] = resource
+    for key in ["rock_alt","rock_spire","tree_alt"]:
+        if parsed.has(key) and ResourceLoader.exists(parsed[key]):
+            var extra = load(parsed[key])
+            if extra is PackedScene: packed[key] = extra
     make_environment()
     setup_preview()
     reset_course()
@@ -532,7 +545,8 @@ func orb(pos: Vector3) -> void:
     a.body_entered.connect(func(body):
         if body == ball and not a.is_queued_for_deletion():
             count += 1
-            play_ui_sound()
+            collect_gold(10)
+            play_effect("pickup")
             if count == 2:
                 spawn = a.position + Vector3(0,0.65,0)
                 checkpoint_active = true
@@ -564,10 +578,16 @@ func reset_course() -> void:
     braking = false
     spawn = Vector3(0, 1.3, 2)
     secret_claimed = false
+    run_gold = 0
     secret_platform = null
     orbs.clear()
     stage_hazards.clear()
+    if is_instance_valid(result_tween): result_tween.kill()
+    result.scale = Vector2.ONE
     result.visible = false
+    result_backdrop.visible = false
+    result_symbol.visible = false
+    gold_flash.visible = false
     play_again.visible = false
     result_home.visible = false
     next_stage_button.visible = false
@@ -692,6 +712,9 @@ func build_route() -> void:
         route_points.append(Vector3(float(pair[0]),route_height(i),float(pair[1])))
     var theme = stage_index%12
     var width: float = [4.8,4.5,4.2,4.4,4.0,4.6,4.7,4.1,4.3,4.2,4.6,4.0][theme]
+    if stage_index>=6: width -= 0.20
+    if stage_index>=12: width -= 0.20
+    if stage_index>=18: width -= 0.15
     for i in range(route_points.size()-1):
         var a: Vector3 = route_points[i]
         var b: Vector3 = route_points[i+1]
@@ -730,10 +753,8 @@ func build_route() -> void:
         bonus_area.body_entered.connect(func(body):
             if body == ball and not secret_claimed and not finished:
                 secret_claimed = true
-                coins += 25
-                earned_total += 25
-                write_save()
-                play_ui_sound()
+                collect_gold(50)
+                play_effect("bonus")
                 bonus_area.queue_free())
     # Obstacles sit on straight segments, away from the centre and junctions.
     for i in range(2,route_points.size()-1,3):
@@ -828,6 +849,15 @@ func island_landscape() -> void:
                 var h = attach_mesh(course,halo,offset+Vector3(0,3.6,0),palette_material("halo",Color("9a83c7"),0.32,0.45))
                 h.rotation.x = PI*0.5
                 crystal_cluster(offset+Vector3(0,2.3,0))
+    # Extra licensed imported silhouettes are placed below/outside the driving corridor.
+    for i in range(1,route_points.size()-1,2):
+        var point: Vector3 = route_points[i]
+        var side = 1.0 if i%4==1 else -1.0
+        var key = "rock_alt" if theme%2==0 else "rock_spire"
+        if packed.has(key):
+            decoration(key,point+Vector3(side*7.8,-4.2,1.9),Vector3(3.0,4.8,3.1))
+        if theme in [1,6] and packed.has("tree_alt"):
+            decoration("tree_alt",point+Vector3(side*8.1,-1.0,1.9),Vector3(1.8,3.0,1.8))
     # Walk-through tunnel arches on broad segments, visually separated from the deck.
     if theme in [2,3,10]:
         var a: Vector3 = route_points[2]
@@ -867,7 +897,7 @@ func _physics_process(delta: float) -> void:
     for a in orbs:
         if is_instance_valid(a):
             a.rotate_y(delta*1.6)
-    stats.text = "%s %d/3   •   %s %ds   •   ◈ %d" % [tr_word(3),count,tr_word(5),int(elapsed),coins]
+    stats.text = "%s %d/3   •   %s %ds   •   ◈ %d" % [tr_word(3),count,tr_word(5),int(elapsed),coins+run_gold]
     if gate.overlaps_body(ball) and count == 3:
         finish_course()
 
@@ -877,27 +907,27 @@ func finish_course() -> void:
     won = true
     ball.set_deferred("freeze", true)
     move = Vector2.ZERO
-    var target_time = stage_length/2.0+14.0
+    var target_time = stage_length/2.5+12.0
     var stars = mini(lives, 3 if elapsed <= target_time else 2)
     var record: Dictionary = stage_records.get(str(stage_index),{})
     var previous_time = float(record.get("time",0.0))
     stage_records[str(stage_index)] = {"time":elapsed if previous_time<=0.0 else minf(previous_time,elapsed),"stars":maxi(stars,int(record.get("stars",0)))}
     unlocked_stage = maxi(unlocked_stage,mini(stage_index+1,STAGE_COUNT-1))
-    coins += stars * 35
-    earned_total += stars * 35
+    coins += run_gold
+    earned_total += run_gold
     victories += 1
-    play_ui_sound()
+    play_effect("win")
     if best == 0 or elapsed < best:
         best = elapsed
     write_save()
-    result.text = "%s\n%s   •   +%d ◈\n%s %.1fs   •   %d/3" % [tr_word(8),"★".repeat(stars)+"☆".repeat(3-stars),stars*35,tr_word(5),elapsed,count]
+    result.text = "%s\n%s   •   +%d ◈\n%s %.1fs   •   %d/3" % [tr_word(8),"★".repeat(stars)+"☆".repeat(3-stars),run_gold,tr_word(5),elapsed,count]
     show_result()
 
 func lose_attempt() -> void:
     if finished or menu_open or respawn_guard > 0.0: return
     respawn_guard = 0.75
     falls += 1
-    play_ui_sound()
+    play_effect("fall")
     lives = maxi(0,lives-1)
     refresh_lives()
     move = Vector2.ZERO
@@ -910,6 +940,8 @@ func lose_attempt() -> void:
     if lives == 0:
         finished = true
         won = false
+        run_gold = 0
+        play_effect("lose")
         ball.set_deferred("freeze",true)
         result.text = "%s\n%s %d/3" % [word(8),tr_word(3),count]
         show_result()
@@ -918,7 +950,20 @@ func lose_attempt() -> void:
         ball.reset_physics_interpolation()
 
 func show_result() -> void:
+    result_backdrop.visible = true
+    result_backdrop.add_theme_stylebox_override("panel",panel_style(Color("142d32") if won else Color("35252e"),Color("e9bd65") if won else Color("dc787e"),28))
+    result_symbol.texture = load("res://assets/royal_ui/victory.svg" if won else "res://assets/royal_ui/defeat.svg")
+    result_symbol.visible = true
     result.visible = true
+    result.pivot_offset = result.size*0.5
+    result.scale = Vector2(0.78,0.78)
+    if is_instance_valid(result_tween): result_tween.kill()
+    result_tween = create_tween()
+    result_tween.tween_property(result,"scale",Vector2.ONE,0.43).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    result_symbol.pivot_offset = result_symbol.size*0.5
+    result_symbol.scale = Vector2(0.2,0.2)
+    result_tween.parallel().tween_property(result_symbol,"scale",Vector2.ONE,0.53).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    if won and vibration and OS.has_feature("mobile"): Input.vibrate_handheld(180)
     play_again.visible = true
     result_home.visible = true
     next_stage_button.visible = won and stage_index < STAGE_COUNT-1
@@ -1155,6 +1200,19 @@ func make_ui() -> void:
     add_child(audio_player)
     if ResourceLoader.exists("res://assets/ui/click.wav"):
         audio_player.stream = load("res://assets/ui/click.wav")
+    effect_player = AudioStreamPlayer.new()
+    add_child(effect_player)
+    rolling_player = AudioStreamPlayer.new()
+    add_child(rolling_player)
+    for key in ["pickup","bonus","win","fall","lose","roll"]:
+        var path = "res://assets/ui/"+key+".wav"
+        if ResourceLoader.exists(path): effects[key] = load(path)
+    if effects.has("roll"):
+        var rolling = effects["roll"] as AudioStreamWAV
+        rolling.loop_mode = AudioStreamWAV.LOOP_FORWARD
+        rolling.loop_begin = 0
+        rolling.loop_end = int(rolling.data.size()/2)
+        rolling_player.stream = rolling
     Engine.max_fps = fps
     var layer = CanvasLayer.new()
     add_child(layer)
@@ -1210,6 +1268,21 @@ func make_ui() -> void:
     brake.add_theme_stylebox_override("pressed",royal_style("brake_active",true))
     brake.button_down.connect(func(): braking = true; play_ui_sound())
     brake.button_up.connect(func(): braking = brake_touch >= 0)
+    gold_flash = label(hud,"",42,Rect2())
+    gold_flash.add_theme_color_override("font_color",Color("ffdf83"))
+    gold_flash.add_theme_color_override("font_outline_color",Color("192527"))
+    gold_flash.add_theme_constant_override("outline_size",5)
+    gold_flash.visible = false
+    result_backdrop = Panel.new()
+    hud.add_child(result_backdrop)
+    result_backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    result_backdrop.visible = false
+    result_symbol = TextureRect.new()
+    hud.add_child(result_symbol)
+    result_symbol.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    result_symbol.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    result_symbol.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    result_symbol.visible = false
     result = label(hud,"",36,Rect2())
     result.max_lines_visible = 3
     result.add_theme_color_override("font_color",Color("ffe198"))
@@ -1225,7 +1298,7 @@ func make_ui() -> void:
 
     menu = make_page("main")
     menu_panel = page_panels["main"]
-    menu_panel.add_theme_stylebox_override("panel",panel_style(Color(0.055,0.105,0.12,0.52),Color(0.75,0.61,0.35,0.65),28))
+    menu_panel.add_theme_stylebox_override("panel",panel_style(Color(0.025,0.07,0.10,0.72),Color(0.60,0.77,0.78,0.42),32))
     menu_title = page_titles["main"]
     menu_title.add_theme_font_size_override("font_size",54)
     menu_title.clip_text = false
@@ -1248,6 +1321,16 @@ func make_ui() -> void:
         show_screen("settings"),"grey")
     action(menu,"levels","play",func(): show_screen("levels"),"gold")
     action(menu,"achievements","check",func(): show_screen("achievements"),"grey")
+    for key in ["play","levels","shop","settings","achievements"]:
+        var b: Button = actions[key]
+        var style_key = "menu_"+key
+        b.add_theme_stylebox_override("normal",royal_style(style_key))
+        b.add_theme_stylebox_override("hover",royal_style(style_key))
+        b.add_theme_stylebox_override("pressed",royal_style("menu_down"))
+        b.icon = load("res://assets/royal_ui/icon_"+key+".svg")
+        b.add_theme_constant_override("icon_max_width",49)
+        b.add_theme_constant_override("h_separation",18)
+        b.add_theme_constant_override("outline_size",2)
 
     var store = make_page("shop")
     balance_label = label(store,"",29,Rect2())
@@ -1363,18 +1446,23 @@ func layout_ui() -> void:
     place(pad,30,h-260,224,224)
     place(joystick_knob,73,73,78,78)
     place(brake,w-254,h-260,224,224)
-    place(result,24,h*0.35,w-48,185)
-    place(next_stage_button,cx-210,h*0.35+190,420,80)
-    place(play_again,cx-210,h*0.35+282,420,76)
-    place(result_home,cx-210,h*0.35+368,420,76)
+    var ry = h*0.23
+    var rw = minf(w-60,550)
+    place(result_backdrop,cx-rw*0.5,ry,rw,590)
+    place(result_symbol,cx-62,ry+20,124,124)
+    place(result,cx-rw*0.5+12,ry+150,rw-24,158)
+    place(next_stage_button,cx-rw*0.44,ry+315,rw*0.88,74)
+    place(play_again,cx-rw*0.44,ry+397,rw*0.88,74)
+    place(result_home,cx-rw*0.44,ry+479,rw*0.88,74)
+    place(gold_flash,cx-150,h*0.27,300,70)
     var mh = h-48.0
     var my = 24.0
     place(menu_panel,px,my,pw,mh)
     place(main_balance,bx,my+8,bw,44)
-    place(menu_title,px+10,my+64,pw-20,174)
-    place(menu_subtitle,px+12,my+240,pw-24,48)
-    var by = h*0.54
-    var bh = clampf((h-by-68)/5.25,58,104)
+    place(menu_title,px+10,my+62,pw-20,150)
+    place(menu_subtitle,px+12,my+211,pw-24,48)
+    var by = h*0.53
+    var bh = clampf((h-by-88)/5.45,58,108)
     place(menu_play,bx,by,bw,bh)
     place(actions["levels"],bx,by+bh*1.08,bw,bh)
     place(actions["shop"],bx,by+bh*2.16,bw,bh)
@@ -1387,7 +1475,7 @@ func layout_ui() -> void:
     actions["levels"].add_theme_font_size_override("font_size",33)
     actions["shop"].add_theme_font_size_override("font_size",33)
     if screen == "main":
-        place(preview_box,px+pw*0.05,my+285,pw*0.90,maxf(100,by-my-295))
+        place(preview_box,px+pw*0.14,my+255,pw*0.72,maxf(100,by-my-265))
 
     var sh = 690.0
     var sy = maxf(20,(h-sh)*0.5)
@@ -1492,7 +1580,7 @@ func refresh_lives() -> void:
 
 func refresh_shop() -> void:
     if not is_instance_valid(balance_label): return
-    balance_label.text = word(10)+"  "+str(coins)
+    balance_label.text = {"en":"GOLD","ar":"الذهب","pt":"OURO"}[lang]+"  "+str(coins)
     main_balance.text = balance_label.text
     preview_caption.text = SKIN_NAMES[lang][preview_index]+"  ·  "+str(preview_index+1)+"/12"
     for i in range(shop_buttons.size()):
@@ -1516,7 +1604,7 @@ func refresh_shop() -> void:
 
 func update_language() -> void:
     heading.text = "%02d · %s" % [stage_index+1,STAGE_NAMES[lang][stage_index]]
-    help.text = {"en":"Collect 3 orbs, reach the flag.","ar":"اجمع ٣ كرات ثم بلغ العلم.","pt":"Colete 3 orbes e alcance a bandeira."}[lang]
+    help.text = {"en":"Gold +10 · Blue +50 · Finish to bank","ar":"الذهبية +١٠ · الزرقاء +٥٠ · أكمل للحفظ","pt":"Ouro +10 · Azul +50 · Conclua para guardar"}[lang]
     restart.text = ""
     menu_button.text = ""
     brake.text = ""
@@ -1529,7 +1617,7 @@ func update_language() -> void:
     result_home.text = word(5)
     menu_title.text = {"en":"MARBLE\nQUEST 3D","ar":"مغامرة الكرة\nثلاثية الأبعاد","pt":"MARBLE\nQUEST 3D"}[lang]
     menu_subtitle.text = EXTRA[lang][2]
-    menu_hint.text = word(27)
+    menu_hint.text = {"en":"Collect gold and finish the course to bank it.","ar":"اجمع الذهب وأكمل المرحلة لحفظه.","pt":"Colete ouro e conclua a fase para guardá-lo."}[lang]
     menu_play.text = word(0)
     actions["shop"].text = word(1)
     actions["settings"].text = word(2)
@@ -1623,6 +1711,26 @@ func pad_input(event: InputEvent) -> void:
 func more(index: int) -> String:
     return MORE[lang][index]
 
+func collect_gold(amount: int) -> void:
+    run_gold += amount
+    if is_instance_valid(gold_tween): gold_tween.kill()
+    gold_flash.text = "+%d  ◈" % amount
+    gold_flash.modulate = Color.WHITE
+    gold_flash.visible = true
+    gold_flash.scale = Vector2(0.7,0.7)
+    gold_flash.pivot_offset = gold_flash.size*0.5
+    gold_tween = create_tween()
+    gold_tween.tween_property(gold_flash,"scale",Vector2.ONE,0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    gold_tween.tween_interval(0.45)
+    gold_tween.tween_property(gold_flash,"modulate:a",0.0,0.32)
+    gold_tween.tween_callback(func(): gold_flash.visible=false)
+
+func play_effect(key: String) -> void:
+    if sound_on and sound_volume>0.0 and effects.has(key):
+        effect_player.stream = effects[key]
+        effect_player.volume_db = linear_to_db(sound_volume*0.8)
+        effect_player.play()
+
 func play_ui_sound() -> void:
     if sound_on and sound_volume > 0.0 and is_instance_valid(audio_player) and audio_player.stream != null:
         audio_player.volume_db = linear_to_db(sound_volume)
@@ -1656,12 +1764,12 @@ func setup_preview() -> void:
     var light = DirectionalLight3D.new()
     root.add_child(light)
     light.rotation_degrees = Vector3(-35,-35,0)
-    light.light_energy = 1.3
+    light.light_energy = 0.90
     var env_node = WorldEnvironment.new()
     var env = Environment.new()
     env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
     env.ambient_light_color = Color("dbe8e4")
-    env.ambient_light_energy = 0.8
+    env.ambient_light_energy = 0.56
     env_node.environment = env
     root.add_child(env_node)
     var cam = Camera3D.new()
@@ -1671,7 +1779,8 @@ func setup_preview() -> void:
     cam.look_at(Vector3.ZERO)
     cam.current = true
     preview_mesh = marble_visual(root,2.1)
-    preview_pedestal = model("track",root,Vector3(2.55,0.35,2.55),Vector3(0,-1.19,0))
+    preview_pedestal = Node3D.new()
+    root.add_child(preview_pedestal)
     preview_pedestal.visible = screen == "main"
     refresh_preview()
 
@@ -1686,6 +1795,15 @@ func refresh_preview() -> void:
         part.material_override = mat
 
 func _process(delta: float) -> void:
+    if is_instance_valid(rolling_player) and rolling_player.stream != null:
+        var speed = 0.0
+        if is_instance_valid(ball) and screen=="play" and not finished and sound_on and sound_volume>0.0 and absf(ball.linear_velocity.y)<1.8:
+            speed = Vector2(ball.linear_velocity.x,ball.linear_velocity.z).length()
+        if speed>0.18:
+            if not rolling_player.playing: rolling_player.play()
+            rolling_player.volume_db = linear_to_db(maxf(0.001,sound_volume*minf(speed/4.7,1.0)*0.27))
+            rolling_player.pitch_scale = 0.8+minf(speed/4.7,1.0)*0.4
+        elif rolling_player.playing: rolling_player.stop()
     if screen == "main" or screen == "play":
         visual_clock += delta
         for i in range(cloud_nodes.size()):

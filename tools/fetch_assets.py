@@ -87,6 +87,8 @@ def extract_pack(pack, urls, choices):
                 matches=[n for n in candidates if re.fullmatch(pattern,token(n)) and n not in used]
                 if matches:
                     found=matches[0]; break
+        if not found and role in ('rock_alt','rock_spire','tree_alt'):
+            continue
         if not found:
             raise SystemExit(f'{pack}: missing {role}; models: {[token(n) for n in candidates]}')
         selected[role]=found
@@ -127,6 +129,9 @@ nature, nature_source=extract_pack('kenney-nature',[
     ('cliff',['cliffrock','cliffblockrock','cliff'],[r'cliff(?:block)?rock[a-z0-9]*']),
     ('waterfall',['cliffwaterfallrock','cliffwaterfall'],[r'cliff.*waterfall.*',r'waterfall.*']),
     ('rock',['rocklargea','rocklargeb'],[r'rocklarge[a-z0-9]*']),
+    ('rock_alt',['rocklargeb','rocklargec'],[r'rocklarge[a-z0-9]*']),
+    ('rock_spire',['rocklarged','rocklargec'],[r'rocklarge[a-z0-9]*',r'cliffrock[a-z0-9]*']),
+    ('tree_alt',['treepine','treepinea','treepinesmall'],[r'treepine[a-z0-9]*',r'tree[a-z0-9]*']),
     ('bridge_wood',['bridgecenterwood','bridgewood','bridgecenter'],[r'bridgecenter[a-z0-9]*',r'bridge.*wood.*']),
     ('grass',['grass','grasslarge','grassleafs','grasstall'],[r'grass[a-z0-9]*']),
     ('flower',['flowerpurplea','floweryellowa','flowerreda'],[r'flower[a-z0-9]*']),

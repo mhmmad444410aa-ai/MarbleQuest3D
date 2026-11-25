@@ -17,3 +17,5 @@ Royal UI (1.2.0): original SVG artwork authored for this project, inspired by th
 1.5.0: 24 courses and 12 architectural families, convex polygon/circular platforms with matching collision, gently sloped courses, side bands with shortened overlap-free trim, original dark albedo and normal surfaces (48 used 2K maps), coherent full-width menu controls and four level pages. Original launcher and royal touch controls retained. No artificial padding.
 
 1.5.0 collision hotfix: mandatory decks and junctions now use a common top plane, with small connector offsets, shortened side rails, and straight-segment obstacle placement. Optional elevated terraces keep a separate shallow ramp. The 24-course real traversal test remains mandatory.
+
+1.6.0: new original 2D menu sprites and icon set; original non-musical synthetic foley; 10 gold for regular pickups, 50 for optional blue pickup, bank gold on victory; higher skin prices, narrower late-stage paths; additional CC0 Nature Kit rock and tree models with manifest and archive provenance. Existing 24 stages and original controls preserved.

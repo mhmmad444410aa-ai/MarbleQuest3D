@@ -53,6 +53,8 @@ jobs:
         run: |
           python3 -m pip install --only-binary=:all: numpy==2.2.6 Pillow==11.3.0
           python3 tools/generate_materials.py
+      - name: Generate original non-musical sound effects
+        run: python3 tools/generate_sfx.py
       - name: Import assets
         run: godot --headless --path . --editor --import > import.log 2>&1 || (cat import.log; exit 1)
       - name: Smoke test

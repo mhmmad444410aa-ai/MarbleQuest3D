@@ -7,7 +7,7 @@ func run() -> void:
     var scene = load("res://main.tscn").instantiate()
     root.add_child(scene)
     await process_frame
-    if not is_instance_valid(scene.ball) or not is_instance_valid(scene.camera) or scene.packed.size() != 14 or scene.orbs.size() != 3:
+    if not is_instance_valid(scene.ball) or not is_instance_valid(scene.camera) or scene.packed.size() < 16 or scene.orbs.size() != 3:
         push_error("Smoke: missing scene components")
         quit(1)
         return
@@ -107,13 +107,13 @@ func run() -> void:
         push_error("Smoke failed: if not scene.pages[\"shop\"].visible or scene.shop_buttons.size()!=12:")
         quit(1)
         return
-    scene.coins = 200
+    scene.coins = 800
     # Preserve Array[int]; assigning an untyped literal through a dynamic Node fails.
     scene.owned.clear()
     scene.owned.append(0)
     scene.equipped = 0
     scene.preview_index = 0
-    if scene.audio_player.stream == null:
+    if scene.audio_player.stream == null or scene.effects.size()!=6 or scene.rolling_player.stream==null:
         push_error("Smoke: bundled UI click not loaded")
         quit(1)
         return
@@ -128,14 +128,14 @@ func run() -> void:
         quit(1)
         return
     scene.buy_or_equip(1)
-    if scene.coins != 140 or not scene.owned.has(1) or scene.equipped != 1:
-        push_error("Smoke failed: if scene.coins != 140 or not scene.owned.has(1) or scene.equipped != 1:")
+    if scene.coins != 150 or not scene.owned.has(1) or scene.equipped != 1:
+        push_error("Smoke failed: if scene.coins != 150 or not scene.owned.has(1) or scene.equipped != 1:")
         quit(1)
         return
     scene.buy_or_equip(1)
     scene.buy_or_equip(11)
-    if scene.coins != 140 or scene.owned.has(11) or scene.equipped != 1:
-        push_error("Smoke failed: if scene.coins != 140 or scene.owned.has(11) or scene.equipped != 1:")
+    if scene.coins != 150 or scene.owned.has(11) or scene.equipped != 1:
+        push_error("Smoke failed: if scene.coins != 150 or scene.owned.has(11) or scene.equipped != 1:")
         quit(1)
         return
     scene.show_screen("play")
@@ -158,17 +158,19 @@ func run() -> void:
         push_error("Smoke failed: if scene.lives != 3 or scene.finished:")
         quit(1)
         return
+    scene.run_gold = 30
     scene.finish_course()
     var awarded = scene.coins
     scene.finish_course()
-    if not scene.won or awarded != 245 or scene.coins != awarded:
-        push_error("Smoke failed: if not scene.won or awarded != 245 or scene.coins != awarded:")
+    if not scene.won or awarded != 180 or scene.coins != awarded:
+        push_error("Smoke failed: if not scene.won or awarded != 180 or scene.coins != awarded:")
         quit(1)
         return
     # Real physics traversal from spawn through all mandatory pickups and the final gate,
     # on every course; do not manually invoke finish_course for this regression.
     for stage in range(24):
         scene.start_stage(stage)
+        var gold_before: int = scene.coins
         await process_frame
         if scene.route_points.size()<6 or scene.stage_index!=stage:
             push_error("Stage data or progression failed "+str(stage))
@@ -195,7 +197,24 @@ func run() -> void:
             push_error("Missing distinct deck artwork "+str(stage))
             quit(1)
             return
+        if scene.run_gold != 30 or scene.coins != gold_before+30:
+            push_error("Gold reward failed stage "+str(stage+1))
+            quit(1)
+            return
         print("FULL_COURSE_OK ",stage+1)
+    scene.start_stage(2)
+    await process_frame
+    var bonus_before: int = scene.coins
+    scene.ball.position = scene.secret_origin+Vector3(0,1.1,0)
+    scene.ball.linear_velocity = Vector3.ZERO
+    for i in range(60):
+        await physics_frame
+        if scene.secret_claimed: break
+    if not scene.secret_claimed or scene.run_gold!=50 or scene.coins!=bonus_before:
+        push_error("Blue bonus economy failed")
+        quit(1)
+        return
+    print("BLUE_BONUS_OK")
     if scene.stage_records.size()!=24:
         push_error("Stage records missing")
         quit(1)
