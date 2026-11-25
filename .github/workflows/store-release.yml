@@ -43,8 +43,10 @@ jobs:
           set -euo pipefail
           umask 077
           ks="$RUNNER_TEMP/preflight.jks"
-          trap 'rm -f "$ks"' EXIT
-          printf '%s' "$KS_B64" | base64 --decode > "$ks"
+          envfile="$RUNNER_TEMP/signing-preflight.env"
+          trap 'rm -f "$ks" "$envfile"' EXIT
+          python3 tools/prepare_signing.py "$ks" "$envfile"
+          source "$envfile"
           actual="$(keytool -exportcert -keystore "$ks" -storepass:env KS_PASS -alias "$KEY_ALIAS" | sha256sum | cut -d' ' -f1)"
           test "$actual" = '4770a2920faf64fa7a3d285e1b93513e840ce0c0cda13cc2541bf7e424135a09' || { echo "::error::Signing certificate does not match the owner's permanent key"; exit 1; }
           echo "Permanent signing certificate verified"
@@ -106,9 +108,11 @@ jobs:
           set -euo pipefail
           umask 077
           ks="$RUNNER_TEMP/quest.jks"
-          trap 'rm -f "$ks"' EXIT
+          envfile="$RUNNER_TEMP/signing-export.env"
+          trap 'rm -f "$ks" "$envfile"' EXIT
           expected=com.mhmmad.marblequest3d
-          printf '%s' "$KS_B64" | base64 --decode > "$ks"
+          python3 tools/prepare_signing.py "$ks" "$envfile"
+          source "$envfile"
           keytool -list -keystore "$ks" -storepass:env KS_PASS -alias "$KEY_ALIAS" >/dev/null
           mkdir -p build
           godot --headless --path . --export-release Android build/unsigned.apk
