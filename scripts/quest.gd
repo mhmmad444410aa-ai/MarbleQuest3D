@@ -32,7 +32,7 @@ var braking = false
 var checkpoint_active = false
 var orbs: Array[Area3D] = []
 var gate: Area3D
-var bridge: Node3D
+var bridge: PhysicsBody3D
 var blocker: AnimatableBody3D
 var clock = 0.0
 var menu_open = true
@@ -466,7 +466,7 @@ func reset_course() -> void:
     platform(Vector3(0,0,-9),Vector3(7.0,0.64,4.7))
     # The optional branch remains visible, but no mandatory orb requires a risky lateral detour.
     platform(Vector3(-3.7,0,-9),Vector3(3.0,0.64,3.6))
-    bridge = platform(Vector3(0,0,-13),Vector3(4.8,0.64,4.8))
+    bridge = platform(Vector3(0,0,-13),Vector3(4.8,0.64,4.8)) as PhysicsBody3D
     # Rail collision matches its visible geometry. No moving collision seam.
     for side in [-1.0,1.0]:
         var rail_pos = Vector3(side*2.26,0.28,0)
