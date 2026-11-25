@@ -1,0 +1,9 @@
+.godot/
+assets/kenney/
+assets/manifest.json
+assets/source.json
+build/
+*.jks
+*.keystore
+.env
+__pycache__/

@@ -1,0 +1,101 @@
+name: Prototype Android verification
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  prototype:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GODOT_VERSION: 4.6.3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android tools
+        run: sdkmanager 'platform-tools' 'platforms;android-35' 'build-tools;35.0.1'
+      - name: Fetch official Godot and matching templates
+        run: |
+          set -euo pipefail
+          base="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-stable"
+          curl --fail --location --retry 3 "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" -o /tmp/godot.zip
+          curl --fail --location --retry 3 "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz" -o /tmp/templates.tpz
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          sudo install -m 755 "/tmp/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64" /usr/local/bin/godot
+          unzip -q /tmp/templates.tpz -d /tmp/templates
+          mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable" "$HOME/.config/godot"
+          cp -a /tmp/templates/templates/. "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
+          printf '[gd_resource type="EditorSettings" format=3]\n[resource]\nexport/android/android_sdk_path = "%s"\nexport/android/java_sdk_path = "%s"\n' "$ANDROID_HOME" "$JAVA_HOME" > "$HOME/.config/godot/editor_settings-4.6.tres"
+          godot --version
+      - name: Fetch licensed original assets
+        run: python3 tools/fetch_assets.py
+      - name: Import assets
+        run: godot --headless --path . --editor --import > import.log 2>&1 || (cat import.log; exit 1)
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path . --script tools/smoke.gd 2>&1 | tee smoke.log
+          grep -q SMOKE_OK smoke.log
+          if grep -E 'SCRIPT ERROR|Parse Error' import.log smoke.log; then exit 1; fi
+      - name: Export and sign prototype
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          ks="$RUNNER_TEMP/quest.jks"
+          trap 'rm -f "$ks"' EXIT
+          expected=com.mhmmad.marblequest3d
+          if [ -n "$KS_B64" ] && [ -n "$KS_PASS" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASS" ]; then
+            printf '%s' "$KS_B64" | base64 --decode > "$ks"
+          else
+            expected=com.mhmmad.marblequest3d.prototype
+            sed -i "s/com.mhmmad.marblequest3d\"/$expected\"/" export_presets.cfg
+            export KS_PASS="$(openssl rand -hex 24)" KEY_ALIAS=prototype
+            export KEY_PASS="$KS_PASS"
+            keytool -genkeypair -keystore "$ks" -storetype JKS -storepass "$KS_PASS" -keypass "$KEY_PASS" -alias "$KEY_ALIAS" -keyalg RSA -keysize 2048 -validity 3650 -dname 'CN=Marble Quest Prototype'
+          fi
+          mkdir -p build
+          godot --headless --path . --export-release Android build/unsigned.apk
+          test -s build/unsigned.apk
+          bt="$ANDROID_HOME/build-tools/35.0.1"
+          "$bt/zipalign" -P 16 -f 4 build/unsigned.apk "$RUNNER_TEMP/aligned.apk"
+          "$bt/apksigner" sign --ks "$ks" --ks-key-alias "$KEY_ALIAS" --ks-pass env:KS_PASS --key-pass env:KEY_PASS --out build/MarbleQuest3D-prototype.apk "$RUNNER_TEMP/aligned.apk"
+          "$bt/apksigner" verify --verbose --print-certs build/MarbleQuest3D-prototype.apk | tee build/certificate.txt
+          "$bt/aapt" dump badging build/MarbleQuest3D-prototype.apk > build/badging.txt
+          grep -Fq "package: name='$expected'" build/badging.txt
+          "$bt/zipalign" -c -P 16 4 build/MarbleQuest3D-prototype.apk
+          python3 - <<'PY'
+          from zipfile import ZipFile
+          with ZipFile('build/MarbleQuest3D-prototype.apk') as z:
+              assert z.testzip() is None
+              for abi in ['arm64-v8a','armeabi-v7a']:
+                  assert any(n.startswith(f'lib/{abi}/') and n.endswith('.so') for n in z.namelist()), abi
+          PY
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: MarbleQuest3D-signed-prototype
+          path: |
+            build/MarbleQuest3D-prototype.apk
+            build/certificate.txt
+            build/badging.txt
+            assets/source.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: prototype-diagnostics
+          path: |
+            import.log
+            smoke.log
+          if-no-files-found: ignore
