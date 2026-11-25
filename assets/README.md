@@ -9,3 +9,5 @@ Kenney UI Audio: https://kenney.nl/assets/ui-audio (CC0 1.0); one original click
 Royal UI (1.2.0): original SVG artwork authored for this project, inspired by the approved stone/gold/emerald concept mockups. Separate stretch-safe button frames, joystick base and moving knob, and brake states. Kenney CC0 icons and sound retained. No mockup used as a flattened UI.
 
 1.2.1: twelve original 2048×1024 marble material maps, 1024×1024 stone albedo and relief normal map, original alpha cloud texture, animated waterfall shader and stone arch landmarks. Generated deterministically by tools/generate_materials.py; no paid assets or padding.
+
+1.3.0: approved original emerald/gold icon, optimised 96px WebP for launcher; three real courses with locked progression; unified collision/visual deck, guard rails, off-centre moving obstacles, and real physics tests for all pickups and finish gates. Extra original 2K gold, moss and crystal texture maps and upgraded stone/normal maps, applied to visible geometry. Store artwork is separately retained at 512px.

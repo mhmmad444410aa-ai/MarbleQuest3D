@@ -165,5 +165,29 @@ func run() -> void:
         push_error("Smoke failed: if not scene.won or awarded != 245 or scene.coins != awarded:")
         quit(1)
         return
+    # Real physics traversal from spawn through all mandatory pickups and the final gate,
+    # on every course; do not manually invoke finish_course for this regression.
+    for stage in range(3):
+        scene.start_stage(stage)
+        await process_frame
+        for tick in range(1050):
+            await physics_frame
+            if scene.finished: break
+            scene.move = Vector2(clampf(-scene.ball.position.x*0.75-scene.ball.linear_velocity.x*0.28,-0.5,0.5),-0.85)
+        scene.move = Vector2.ZERO
+        if not scene.won or scene.count != 3 or scene.falls != 0 or scene.lives != 3:
+            push_error("Full route failed stage %d at %s pickups %d falls %d" % [stage+1,str(scene.ball.position),scene.count,scene.falls])
+            quit(1)
+            return
+        print("FULL_COURSE_OK ",stage+1)
+    if not ResourceLoader.exists("res://assets/royal_ui/launcher.webp"):
+        push_error("Approved launcher icon missing")
+        quit(1)
+        return
+    for key in ["gold_metal","moss","crystal"]:
+        if scene.art_texture(key) == null:
+            push_error("New material missing "+key)
+            quit(1)
+            return
     print("SMOKE_OK")
     quit(0)

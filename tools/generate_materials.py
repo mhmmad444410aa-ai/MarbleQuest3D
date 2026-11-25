@@ -51,7 +51,7 @@ for i,(dark,mid,light) in enumerate(palettes):
     png("marble_%02d"%i,W,H,3,b"".join(lut[n] for n in field))
     print("Material marble",i,flush=True)
 # Tileable weathered stone relief; mortar, warm grey slate and fine texture.
-N=1024
+N=2048
 stone=bytearray(); normal=bytearray()
 def height(x,y):
     u=(x%N)/N;v=(y%N)/N
@@ -65,8 +65,8 @@ heights=[height(x,y) for y in range(N) for x in range(N)]
 for y in range(N):
     for x in range(N):
         h=heights[y*N+x]
-        variation=math.sin(TAU*(x/N*7+y/N*3))*7
-        stone.extend(bytes(clamp(c*h+variation+24) for c in (143,139,126)))
+        variation=math.sin(TAU*(x/N*7+y/N*3))*7+math.sin(TAU*(x/N*53-y/N*47))*5
+        stone.extend(bytes(clamp(c*h+variation+24) for c in (113,110,98)))
         dx=(heights[y*N+(x+1)%N]-heights[y*N+(x-1)%N])*7
         dy=(heights[((y+1)%N)*N+x]-heights[((y-1)%N)*N+x])*7
         inv=1/math.sqrt(dx*dx+dy*dy+1)
@@ -86,3 +86,19 @@ for y in range(N):
         data.extend(bytes((shade,shade,min(255,shade+10),a)))
 png("cloud",N,N,4,data)
 print("Original high-resolution materials ready",flush=True)
+
+# Rich original decorative materials, used on deck borders and stage landmarks.
+N=2048
+for name,base,amp in [("gold_metal",(168,121,49),32),("moss",(56,102,44),38),("crystal",(54,143,133),52)]:
+    data=bytearray()
+    for y in range(N):
+        v=y/N
+        for x in range(N):
+            u=x/N
+            n=(math.sin(TAU*(u*17+v*11)+math.sin(TAU*(u*3-v*4))*1.4)*.40+
+               math.sin(TAU*(u*73-v*39))* .24+
+               math.sin(TAU*(u*151+v*83))* .10+
+               math.sin(TAU*(u*5-v*3))*.26)
+            data.extend(bytes(clamp(c+n*amp) for c in base))
+    png(name,N,N,3,data)
+    print("Material",name,flush=True)

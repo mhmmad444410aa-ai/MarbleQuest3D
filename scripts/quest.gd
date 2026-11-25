@@ -32,7 +32,7 @@ var braking = false
 var checkpoint_active = false
 var orbs: Array[Area3D] = []
 var gate: Area3D
-var bridge: AnimatableBody3D
+var bridge: Node3D
 var blocker: AnimatableBody3D
 var clock = 0.0
 var menu_open = true
@@ -50,6 +50,13 @@ var menu_panel: Panel
 var language_buttons: Array[Button] = []
 var materials: Dictionary = {}
 var lives = 3
+var stage_index = 0
+var unlocked_stage = 0
+var next_stage_button: Button
+var stage_hazards: Array[AnimatableBody3D] = []
+const STAGE_NAMES = {"en":["Sky Crossing","Emerald Passage","Golden Ruins"],"ar":["عبور السماء","ممر الزمرد","الأطلال الذهبية"],"pt":["Travessia Celeste","Passagem Esmeralda","Ruínas Douradas"]}
+const STAGE_END = [-25.0,-33.0,-41.0]
+const STAGE_ORBS = [[-4.8,-9.0,-20.0],[-5.0,-17.0,-29.0],[-5.0,-21.0,-37.0]]
 var coins = 0
 var owned: Array[int] = [0]
 var equipped = 0
@@ -247,6 +254,31 @@ func ruin_arch(pos: Vector3, scale_factor: float) -> void:
         var theta = float(i)*PI/10.0
         stone_piece(arch,Vector3(cos(theta)*1.25,1.98+sin(theta)*1.25,0),Vector3(0.58,0.43,0.76),theta)
 
+func crystal_cluster(pos: Vector3) -> void:
+    var cluster = Node3D.new()
+    course.add_child(cluster)
+    cluster.position = pos
+    for i in range(4):
+        var crystal = MeshInstance3D.new()
+        var shape = CylinderMesh.new()
+        shape.top_radius = 0.0
+        shape.bottom_radius = 0.16+float(i%2)*0.06
+        shape.height = 0.7+float(i%3)*0.26
+        shape.radial_segments = 5
+        shape.rings = 1
+        crystal.mesh = shape
+        crystal.material_override = palette_material("crystal",Color("76c6b6"),0.22,0.34)
+        cluster.add_child(crystal)
+        crystal.position = Vector3(float(i%2)*0.36,shape.height*0.5,float(i/2)*0.25)
+        crystal.rotation.z = (float(i)-1.5)*0.14
+    var moss = MeshInstance3D.new()
+    var base = BoxMesh.new()
+    base.size = Vector3(1.1,0.12,0.9)
+    moss.mesh = base
+    moss.material_override = palette_material("moss",Color("86ad66"),0.92,0.0)
+    cluster.add_child(moss)
+    moss.position.y = -0.06
+
 func flowing_water(pos: Vector3, width: float, height: float) -> void:
     var sheet = MeshInstance3D.new()
     var quad = QuadMesh.new()
@@ -298,14 +330,25 @@ func palette_material(key: String, colour: Color, roughness: float, metallic: fl
         mat.roughness = roughness
         mat.metallic = metallic
         if key == "track":
-            mat.albedo_color = Color.WHITE
+            mat.albedo_color = Color("a7b29b")
             mat.albedo_texture = art_texture("stone")
             mat.normal_enabled = true
             mat.normal_texture = art_texture("stone_normal")
-            mat.normal_scale = 0.55
+            mat.normal_scale = 0.24
             mat.uv1_triplanar = true
             mat.uv1_world_triplanar = true
-            mat.uv1_scale = Vector3.ONE*0.65
+            mat.uv1_scale = Vector3.ONE*0.34
+        elif key == "gold_trim":
+            mat.albedo_texture = art_texture("gold_metal")
+        elif key == "moss":
+            mat.albedo_texture = art_texture("moss")
+            mat.uv1_triplanar = true
+            mat.uv1_world_triplanar = true
+        elif key == "crystal":
+            mat.albedo_texture = art_texture("crystal")
+            mat.emission_enabled = true
+            mat.emission = Color("277f71")
+            mat.emission_energy_multiplier = 0.25
         materials[key] = mat
     return materials[key]
 
@@ -339,8 +382,17 @@ func platform(pos: Vector3, size: Vector3, moving: bool = false) -> Node3D:
         body = StaticBody3D.new()
     course.add_child(body)
     body.position = pos
-    model("track", body, size, Vector3(0, -size.y*0.5, 0))
+    # Visual deck and collision share exactly the same dimensions and top plane.
+    stone_piece(body,Vector3(0,-size.y*0.5,0),size)
     collider(body, size, Vector3(0, -size.y/2, 0))
+    for side in [-1.0,1.0]:
+        var trim = MeshInstance3D.new()
+        var strip = BoxMesh.new()
+        strip.size = Vector3(0.13,0.15,size.z)
+        trim.mesh = strip
+        trim.material_override = palette_material("gold_trim",Color("b49346"),0.36,0.42)
+        body.add_child(trim)
+        trim.position = Vector3(side*(size.x*0.5-0.075),-0.075,0)
     return body
 
 func decoration(kind: String, pos: Vector3, size: Vector3) -> void:
@@ -375,8 +427,9 @@ func orb(pos: Vector3) -> void:
     a.body_entered.connect(func(body):
         if body == ball and not a.is_queued_for_deletion():
             count += 1
-            if count == 2 and not checkpoint_active and ball.position.z < -7.0 and ball.position.z > -11.0:
-                spawn = Vector3(0,1.3,-9)
+            if count == 2:
+                spawn = Vector3(0,1.3,a.position.z)
+                checkpoint_active = true
             a.queue_free())
     orbs.append(a)
 
@@ -400,37 +453,50 @@ func reset_course() -> void:
     braking = false
     spawn = Vector3(0, 1.3, 2)
     orbs.clear()
+    stage_hazards.clear()
     result.visible = false
     play_again.visible = false
     result_home.visible = false
+    next_stage_button.visible = false
     pad.visible = true
     brake.visible = true
     refresh_lives()
-    platform(Vector3(0,0,0),Vector3(5,0.65,6))
-    platform(Vector3(0,0,-5),Vector3(3.4,0.6,4.35))
-    platform(Vector3(0,0,-9),Vector3(6.6,0.7,4.5))
-    platform(Vector3(-3.55,0,-9),Vector3(3.2,0.65,3.6))
-    bridge = platform(Vector3(0,0,-13),Vector3(4.6,0.55,4.75),true) as AnimatableBody3D
-    platform(Vector3(0,0,-17),Vector3(5.8,0.7,4.6))
-    platform(Vector3(0,0,-21),Vector3(4.8,0.7,4.4))
-    platform(Vector3(0,0,-25),Vector3(5.4,0.7,4.4))
+    platform(Vector3(0,0,0),Vector3(6.0,0.64,6.5))
+    platform(Vector3(0,0,-5),Vector3(4.1,0.64,4.7))
+    platform(Vector3(0,0,-9),Vector3(7.0,0.64,4.7))
+    # The optional branch remains visible, but no mandatory orb requires a risky lateral detour.
+    platform(Vector3(-3.7,0,-9),Vector3(3.0,0.64,3.6))
+    bridge = platform(Vector3(0,0,-13),Vector3(4.8,0.64,4.8))
+    # Rail collision matches its visible geometry. No moving collision seam.
+    for side in [-1.0,1.0]:
+        var rail_pos = Vector3(side*2.26,0.28,0)
+        var rail_size = Vector3(0.28,0.56,4.8)
+        stone_piece(bridge,rail_pos,rail_size)
+        collider(bridge,rail_size,rail_pos)
+    platform(Vector3(0,0,-17),Vector3(6.4,0.64,4.7))
+    platform(Vector3(0,0,-21),Vector3(5.4,0.64,4.7))
+    platform(Vector3(0,0,-25),Vector3(6.4,0.64,4.7))
+    var end_z: float = STAGE_END[stage_index]
+    if stage_index >= 1:
+        platform(Vector3(-0.7,0,-29),Vector3(4.8,0.64,4.7))
+        platform(Vector3(0.5,0,-33),Vector3(6.2,0.64,4.7))
+    if stage_index >= 2:
+        platform(Vector3(0.9,0,-37),Vector3(4.6,0.64,4.7))
+        platform(Vector3(-0.4,0,-41),Vector3(6.4,0.64,4.7))
     island_landscape()
-    decoration("marker",Vector3(1.7,1.25,-17),Vector3(0.7,2.2,0.7))
-    decoration("marker",Vector3(1.8,1.5,-25),Vector3(0.9,2.8,0.9))
-    orb(Vector3(0,0.7,-4.8))
-    orb(Vector3(-3.55,0.7,-9))
-    orb(Vector3(0,0.7,-20))
+    decoration("marker",Vector3(2.35,1.25,-17),Vector3(0.7,2.2,0.7))
+    decoration("marker",Vector3(2.2,1.5,end_z),Vector3(0.9,2.8,0.9))
+    for z in STAGE_ORBS[stage_index]:
+        orb(Vector3(0,0.7,float(z)))
     var cp = area_at(Vector3(0,0.8,-17),Vector3(3,1.6,2))
     cp.body_entered.connect(func(body):
         if body == ball and count >= 2 and not checkpoint_active:
             spawn = Vector3(0,1.2,-17)
             checkpoint_active = true)
-    blocker = AnimatableBody3D.new()
-    course.add_child(blocker)
-    blocker.position = Vector3(0,0.6,-22)
-    model("support",blocker,Vector3(1.5,0.8,0.55))
-    collider(blocker,Vector3(1.5,0.8,0.55),Vector3.ZERO)
-    gate = area_at(Vector3(0,0.8,-25),Vector3(3,1.6,2))
+    blocker = make_hazard(Vector3(1.8,0.42,-22))
+    if stage_index >= 1: make_hazard(Vector3(-1.65,0.42,-30.5))
+    if stage_index >= 2: make_hazard(Vector3(1.75,0.42,-38.5))
+    gate = area_at(Vector3(0,0.8,end_z),Vector3(3.2,1.6,2))
     gate.body_entered.connect(func(body):
         if body == ball and count == 3 and not finished:
             finish_course())
@@ -457,11 +523,30 @@ func reset_course() -> void:
     brake_touch = -1
     touch_id = -1
     apply_skin()
-    camera.position = spawn + Vector3(0,8,8)
+    camera.position = spawn + Vector3(0,6.8,8.6)
     camera.look_at(spawn + Vector3(0,0,-3))
+    heading.text = STAGE_NAMES[lang][stage_index]
 
 # Imported environmental meshes remain visual only: the proven course
 # collision shapes are unchanged. No generated primitive scenery.
+func make_hazard(pos: Vector3) -> AnimatableBody3D:
+    var hazard = AnimatableBody3D.new()
+    course.add_child(hazard)
+    hazard.position = pos
+    hazard.set_meta("origin_x",pos.x)
+    var size = Vector3(0.8,0.72,0.55)
+    stone_piece(hazard,Vector3.ZERO,size)
+    collider(hazard,size,Vector3.ZERO)
+    stage_hazards.append(hazard)
+    return hazard
+
+func start_stage(index: int) -> void:
+    if index < 0 or index >= STAGE_END.size() or index > unlocked_stage: return
+    stage_index = index
+    reset_course()
+    home_needs_reset = false
+    show_screen("play")
+
 func island_landscape() -> void:
     var islands = [
         [Vector3(0,-1.9,0),Vector3(5.6,3.0,6.4)],
@@ -473,9 +558,22 @@ func island_landscape() -> void:
     for entry in islands:
         var centre: Vector3 = entry[0]
         var extent: Vector3 = entry[1]
-        decoration("cliff",centre,extent)
-        decoration("rock",centre+Vector3(0,-extent.y*0.48,0),extent*0.60)
-        decoration("rock",centre+Vector3(extent.x*0.37,-0.4,0.4),extent*0.33)
+        centre.y = minf(centre.y,-extent.y*0.5-0.75)
+        decoration("rock",centre,extent)
+        decoration("rock",centre+Vector3(0,-extent.y*0.48,0),extent*0.64)
+        decoration("rock",centre+Vector3(extent.x*0.32,-0.4,0.4),extent*0.40)
+    if stage_index >= 1:
+        for z in [-29.0,-33.0]:
+            decoration("rock",Vector3(0,-2.7,z),Vector3(6.2,3.8,4.5))
+            ruin_arch(Vector3(3.6,-0.3,z),0.82)
+            crystal_cluster(Vector3(-2.1,0.0,z))
+    if stage_index >= 2:
+        for z in [-37.0,-41.0]:
+            decoration("rock",Vector3(0,-3.0,z),Vector3(6.8,4.0,4.7))
+            ruin_arch(Vector3(-3.6,-0.2,z),1.05)
+            crystal_cluster(Vector3(2.2,0.0,z))
+    crystal_cluster(Vector3(2.2,0.0,-9))
+    crystal_cluster(Vector3(-2.4,0.0,-25))
     # Border foliage, deliberately off the path of the marble.
     for v in [Vector3(-2.1,0,0.6),Vector3(2.5,0,-9.8),Vector3(-2.15,0,-17.2),Vector3(-2.15,0,-25.2)]:
         decoration("forest_tree",v+Vector3(0,1.55,0),Vector3(1.8,3.1,1.8))
@@ -513,8 +611,8 @@ func _physics_process(delta: float) -> void:
     elapsed += delta
     clock += delta
     respawn_guard = maxf(0.0,respawn_guard-delta)
-    bridge.position.x = sin(clock * 0.85) * 0.40
-    blocker.position.x = sin(clock * 1.8) * 1.4
+    for hazard in stage_hazards:
+        hazard.position.x = float(hazard.get_meta("origin_x")) + sin(clock * 1.45 + hazard.position.z)*0.24
     var axis = move
     axis += Vector2(float(Input.is_physical_key_pressed(KEY_D))-float(Input.is_physical_key_pressed(KEY_A)),float(Input.is_physical_key_pressed(KEY_S))-float(Input.is_physical_key_pressed(KEY_W)))
     axis = axis.limit_length(1.0)
@@ -528,8 +626,8 @@ func _physics_process(delta: float) -> void:
     if ball.position.y < -5 and respawn_guard <= 0.0:
         lose_attempt()
         if finished: return
-    camera.position = camera.position.lerp(ball.position + Vector3(0,8,8),1.0-exp(-delta*5.0))
-    camera.look_at(camera.position + Vector3(0,-8,-11))
+    camera.position = camera.position.lerp(ball.position + Vector3(0,6.8,8.6),1.0-exp(-delta*5.0))
+    camera.look_at(camera.position + Vector3(0,-6.8,-11.6))
     for a in orbs:
         if is_instance_valid(a):
             a.rotate_y(delta*1.6)
@@ -544,6 +642,7 @@ func finish_course() -> void:
     ball.set_deferred("freeze", true)
     move = Vector2.ZERO
     var stars = lives
+    unlocked_stage = maxi(unlocked_stage,mini(stage_index+1,STAGE_END.size()-1))
     coins += stars * 35
     earned_total += stars * 35
     victories += 1
@@ -582,6 +681,7 @@ func show_result() -> void:
     result.visible = true
     play_again.visible = true
     result_home.visible = true
+    next_stage_button.visible = won and stage_index < STAGE_END.size()-1
     pad.visible = false
     brake.visible = false
     refresh_shop()
@@ -630,6 +730,7 @@ func read_save() -> void:
         var saved = str(cfg.get_value("settings","lang","en"))
         if WORDS.has(saved): lang = saved
         coins = maxi(0,int(cfg.get_value("progress","coins",0)))
+        unlocked_stage = clampi(int(cfg.get_value("progress","unlocked_stage",0)),0,STAGE_END.size()-1)
         var saved_owned = cfg.get_value("progress","owned",[0])
         if not saved_owned is Array: saved_owned = [0]
         for id in saved_owned:
@@ -651,6 +752,7 @@ func write_save() -> void:
     cfg.set_value("progress","best",best)
     cfg.set_value("settings","lang",lang)
     cfg.set_value("progress","coins",coins)
+    cfg.set_value("progress","unlocked_stage",unlocked_stage)
     cfg.set_value("progress","owned",owned)
     cfg.set_value("progress","equipped",equipped)
     cfg.set_value("settings","quality",quality)
@@ -852,12 +954,14 @@ func make_ui() -> void:
     play_again.visible = false
     result_home = action(hud,"result_home","home",func(): go_home(),"grey")
     result_home.visible = false
+    next_stage_button = action(hud,"next_stage","play",func(): start_stage(stage_index+1),"gold")
+    next_stage_button.visible = false
 
     menu = make_page("main")
     menu_panel = page_panels["main"]
     menu_panel.add_theme_stylebox_override("panel",StyleBoxEmpty.new())
     menu_title = page_titles["main"]
-    menu_title.add_theme_font_size_override("font_size",54)
+    menu_title.add_theme_font_size_override("font_size",68)
     menu_title.add_theme_color_override("font_outline_color",Color("182a20"))
     menu_title.add_theme_constant_override("outline_size",12)
     menu_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -935,7 +1039,9 @@ func make_ui() -> void:
     action(settings,"about","gear",func(): show_screen("about"),"grey")
     action(settings,"settings_back","back",func(): show_screen(settings_return),"grey")
     var levels = make_page("levels")
-    action(levels,"level_one","play",func(): reset_course(); show_screen("play"))
+    action(levels,"level_one","play",func(): start_stage(0))
+    action(levels,"level_two","play",func(): start_stage(1),"gold")
+    action(levels,"level_three","play",func(): start_stage(2),"grey")
     action(levels,"levels_back","back",func(): show_screen("main"),"grey")
     var achievements = make_page("achievements")
     achievement_text = label(achievements,"",28,Rect2())
@@ -987,15 +1093,16 @@ func layout_ui() -> void:
     place(joystick_knob,77,77,78,78)
     place(brake,w-190,h-202,160,160)
     place(result,24,h*0.35,w-48,185)
-    place(play_again,cx-160,h*0.35+190,320,80)
-    place(result_home,cx-160,h*0.35+282,320,74)
+    place(next_stage_button,cx-210,h*0.35+190,420,80)
+    place(play_again,cx-210,h*0.35+282,420,76)
+    place(result_home,cx-210,h*0.35+368,420,76)
     var mh = h-48.0
     var my = 24.0
     place(menu_panel,px,my,pw,mh)
     place(main_balance,bx,my+8,bw,44)
-    place(menu_title,px+10,my+64,pw-20,140)
-    place(menu_subtitle,px+12,my+206,pw-24,48)
-    var by = h*0.57
+    place(menu_title,px+10,my+64,pw-20,174)
+    place(menu_subtitle,px+12,my+240,pw-24,48)
+    var by = h*0.58
     var bh = clampf((h-by-72)/4.3,56,108)
     place(menu_play,bx,by,bw,bh)
     place(actions["levels"],bx,by+bh*1.08,bw,bh)
@@ -1003,10 +1110,13 @@ func layout_ui() -> void:
     place(actions["settings"],bx,by+bh*3.24,bw*0.49,bh)
     place(actions["achievements"],bx+bw*0.51,by+bh*3.24,bw*0.49,bh)
     place(menu_hint,bx,by+bh*4.24,bw,35)
-    actions["settings"].add_theme_font_size_override("font_size",22)
-    actions["achievements"].add_theme_font_size_override("font_size",22)
+    actions["settings"].add_theme_font_size_override("font_size",25)
+    actions["achievements"].add_theme_font_size_override("font_size",25)
+    menu_play.add_theme_font_size_override("font_size",42)
+    actions["levels"].add_theme_font_size_override("font_size",33)
+    actions["shop"].add_theme_font_size_override("font_size",33)
     if screen == "main":
-        place(preview_box,px+pw*0.12,my+254,pw*0.76,maxf(100,by-my-264))
+        place(preview_box,px+pw*0.05,my+285,pw*0.90,maxf(100,by-my-295))
 
     var sh = 690.0
     var sy = maxf(20,(h-sh)*0.5)
@@ -1022,7 +1132,7 @@ func layout_ui() -> void:
         place(shop_buttons[i],bx,sy+496,bw,86)
     place(actions["shop_back"],bx,sy+603,bw,65)
 
-    var dh = 930.0
+    var dh = minf(h-48,1080.0)
     var dy = maxf(20,(h-dh)*0.5)
     place(page_panels["settings"],px,dy,pw,dh)
     place(page_titles["settings"],px+10,dy+15,pw-20,68)
@@ -1031,14 +1141,18 @@ func layout_ui() -> void:
     for i in range(3):
         place(language_buttons[i],bx+i*(lw+12),dy+158,lw,70)
     var settings_keys = ["quality","vibration","sound","volume","sensitivity","fps","defaults","about","settings_back"]
+    var setting_step = (dh-260.0)/9.0
     for i in range(settings_keys.size()):
-        place(actions[settings_keys[i]],bx,dy+244+i*72,bw,62)
+        place(actions[settings_keys[i]],bx,dy+244+i*setting_step,bw,setting_step-9.0)
+        actions[settings_keys[i]].add_theme_font_size_override("font_size",30)
     for key in ["levels","achievements","about"]:
         var py2 = maxf(20,(h-540)*0.5)
         place(page_panels[key],px,py2,pw,540)
         place(page_titles[key],px+12,py2+18,pw-24,72)
         place(actions[key+"_back"],bx,py2+438,bw,70)
-        if key == "levels": place(actions["level_one"],bx,py2+154,bw,100)
+        if key == "levels":
+            for i in range(3):
+                place(actions[["level_one","level_two","level_three"][i]],bx,py2+105+i*105,bw,88)
         if key == "achievements": place(achievement_text,bx,py2+105,bw,300)
         if key == "about": place(info_text,bx,py2+105,bw,300)
 
@@ -1077,6 +1191,7 @@ func show_screen(next: String) -> void:
         preview_world.render_target_update_mode = SubViewport.UPDATE_ALWAYS if next in ["main","shop"] else SubViewport.UPDATE_DISABLED
         if is_instance_valid(preview_pedestal): preview_pedestal.visible = next == "main"
         layout_ui.call_deferred()
+    if next == "levels": update_language()
     if next == "achievements": refresh_achievements()
     if next == "shop" or next == "main": refresh_shop()
     if next == "settings": update_language()
@@ -1119,7 +1234,7 @@ func refresh_shop() -> void:
     refresh_preview()
 
 func update_language() -> void:
-    heading.text = word(28)
+    heading.text = STAGE_NAMES[lang][stage_index]
     help.text = {"en":"Collect 3 orbs, reach the flag.","ar":"اجمع ٣ كرات ثم بلغ العلم.","pt":"Colete 3 orbes e alcance a bandeira."}[lang]
     restart.text = ""
     menu_button.text = ""
@@ -1131,7 +1246,7 @@ func update_language() -> void:
         b.add_theme_constant_override("outline_size",7)
     play_again.text = word(9)
     result_home.text = word(5)
-    menu_title.text = {"en":"Marble Quest 3D","ar":"مغامرة الكرة 3D","pt":"Marble Quest 3D"}[lang]
+    menu_title.text = {"en":"MARBLE\nQUEST 3D","ar":"مغامرة الكرة\nثلاثية الأبعاد","pt":"MARBLE\nQUEST 3D"}[lang]
     menu_subtitle.text = EXTRA[lang][2]
     menu_hint.text = word(27)
     menu_play.text = word(0)
@@ -1154,7 +1269,12 @@ func update_language() -> void:
     page_titles["levels"].text = more(0)
     page_titles["achievements"].text = more(1)
     page_titles["about"].text = more(7)
-    actions["level_one"].text = "01  ·  "+more(14)
+    for i in range(3):
+        var level_button: Button = actions[["level_one","level_two","level_three"][i]]
+        level_button.text = "%02d  ·  %s" % [i+1,STAGE_NAMES[lang][i]]
+        level_button.disabled = i > unlocked_stage
+        level_button.icon = tex("lock" if i > unlocked_stage else "play")
+    next_stage_button.text = {"en":"NEXT COURSE","ar":"المرحلة التالية","pt":"PRÓXIMA FASE"}[lang]
     for key in ["levels","achievements","about"]:
         actions[key+"_back"].text = word(6)
     actions["sound"].text = more(2)+"  •  "+word(20 if sound_on else 21)
@@ -1249,7 +1369,8 @@ func setup_preview() -> void:
     root.add_child(env_node)
     var cam = Camera3D.new()
     root.add_child(cam)
-    cam.position = Vector3(0,1.05,4.8)
+    cam.fov = 43.0
+    cam.position = Vector3(0,0.72,4.5)
     cam.look_at(Vector3.ZERO)
     cam.current = true
     preview_mesh = marble_visual(root,2.1)
