@@ -42,3 +42,106 @@ for n in files:
 (ROOT/'assets'/'manifest.json').write_text(json.dumps({k:'res://assets/kenney/'+v for k,v in selected.items()},indent=2))
 (ROOT/'assets'/'source.json').write_text(json.dumps({'author':'Kenney','license':'CC0-1.0','source':source,'archive_sha256':hashlib.sha256(data).hexdigest(),'selected':selected},indent=2))
 print(selected)
+
+
+# Download only publisher-distributed CC0 packs and extract selected models plus
+# their declared glTF dependencies. Do not copy premium/source editions.
+def fetch_zip(urls, cap=160_000_000):
+    for url in urls:
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0'}),timeout=120) as r:
+                blob=r.read(cap+1)
+            if len(blob)>cap or not zipfile.is_zipfile(io.BytesIO(blob)):
+                raise ValueError('invalid or oversized archive')
+            return blob,url
+        except Exception as exc:
+            print('Download attempt:',url,exc,flush=True)
+    raise SystemExit('Unable to download required free environment pack')
+
+import struct, posixpath, urllib.parse
+def token(name):
+    return re.sub(r'[^a-z0-9]','',Path(name).stem.lower())
+
+def extract_pack(pack, urls, choices):
+    blob, source_url=fetch_zip(urls)
+    archive=zipfile.ZipFile(io.BytesIO(blob))
+    names=set(archive.namelist())
+    for n in names:
+        path=PurePosixPath(n)
+        if path.is_absolute() or '..' in path.parts:
+            raise SystemExit('Unsafe archive member')
+    candidates=sorted((n for n in names if Path(n).suffix.lower() in ('.glb','.gltf') and not n.startswith('__MACOSX/')),key=lambda n:(not n.lower().endswith('.glb'),len(n),n))
+    used=set()
+    selected={}
+    for role, exact, patterns in choices:
+        found=None
+        for name in exact:
+            matches=[n for n in candidates if token(n)==name and n not in used]
+            if matches:
+                found=matches[0]; break
+        if found is None:
+            for pattern in patterns:
+                matches=[n for n in candidates if re.fullmatch(pattern,token(n)) and n not in used]
+                if matches:
+                    found=matches[0]; break
+        if not found:
+            raise SystemExit(f'{pack}: missing {role}; models: {[token(n) for n in candidates]}')
+        selected[role]=found
+        used.add(found)
+    target=ROOT/'assets'/'environment'/pack
+    def save_member(n):
+        dest=target.joinpath(*PurePosixPath(n).parts)
+        dest.parent.mkdir(parents=True,exist_ok=True)
+        dest.write_bytes(archive.read(n))
+    for role,n in selected.items():
+        save_member(n)
+        raw=archive.read(n)
+        if n.lower().endswith('.glb'):
+            if raw[:4]!=b'glTF': raise SystemExit('Invalid GLB')
+            size,kind=struct.unpack_from('<II',raw,12)
+            if kind!=0x4E4F534A: raise SystemExit('Invalid GLB JSON chunk')
+            doc=json.loads(raw[20:20+size])
+        else:
+            doc=json.loads(raw)
+        for entry in doc.get('images',[])+doc.get('buffers',[]):
+            uri=entry.get('uri','')
+            if not uri or uri.startswith('data:'): continue
+            if urllib.parse.urlparse(uri).scheme or uri.startswith('/'):
+                raise SystemExit('External dependency rejected')
+            relative=posixpath.normpath(posixpath.join(posixpath.dirname(n),urllib.parse.unquote(uri)))
+            if relative.startswith('../') or relative not in names:
+                raise SystemExit(f'Missing dependency: {relative}')
+            save_member(relative)
+    for n in sorted(names):
+        if re.match(r'^(license|licence|readme|credits)',Path(n).stem,re.I) and Path(n).suffix.lower() in ('.txt','.md'):
+            save_member(n)
+    return ({k:'res://assets/environment/'+pack+'/'+v for k,v in selected.items()}, {'source':source_url,'license':'CC0-1.0','archive_sha256':hashlib.sha256(blob).hexdigest(),'selected':selected})
+
+nature, nature_source=extract_pack('kenney-nature',[
+    'https://kenney.nl/media/pages/assets/nature-kit/37ac38a37b-1677698939/kenney_nature-kit.zip'
+],[
+    ('cliff',['cliffrock','cliffblockrock','cliff'],[r'cliff(?:block)?rock[a-z0-9]*']),
+    ('waterfall',['cliffwaterfallrock','cliffwaterfall'],[r'cliff.*waterfall.*',r'waterfall.*']),
+    ('rock',['rocklargea','rocklargeb'],[r'rocklarge[a-z0-9]*']),
+    ('bridge_wood',['bridgecenter','bridgecenterwood','bridgewood'],[r'bridgecenter[a-z0-9]*',r'bridge.*wood.*']),
+    ('grass',['grass','grasstall','plantflattall'],[r'grass[a-z0-9]*']),
+    ('flower',['flowerpurplea','floweryellowa','flowerreda'],[r'flower[a-z0-9]*']),
+])
+forest, forest_source=extract_pack('quaternius-nature',[
+    'https://store.godotengine.org/asset/quaternius/stylized-nature-megakit/download/31/',
+    'https://opengameart.org/sites/default/files/stylized_nature_megakitstandard.zip'
+],[
+    ('forest_tree',['commontree1','commontree2','tree1'],[r'common.*tree.*',r'.*tree.*']),
+    ('forest_tree_alt',['commontree2','commontree4','pinetree1','tree2'],[r'common.*tree.*',r'.*tree.*']),
+    ('forest_bush',['bushcommon','commonbush','bush1'],[r'.*bush.*']),
+])
+manifest_path=ROOT/'assets'/'manifest.json'
+manifest=json.loads(manifest_path.read_text())
+manifest.update(nature)
+manifest.update(forest)
+manifest_path.write_text(json.dumps(manifest,indent=2))
+source_path=ROOT/'assets'/'source.json'
+metadata=json.loads(source_path.read_text())
+metadata['additional_packs']={'Kenney Nature Kit':nature_source,'Quaternius Stylized Nature MegaKit Standard':forest_source}
+source_path.write_text(json.dumps(metadata,indent=2))
+print('Environment selected:',nature,forest,flush=True)

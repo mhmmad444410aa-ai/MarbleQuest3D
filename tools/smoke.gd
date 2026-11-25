@@ -7,7 +7,7 @@ func run() -> void:
     var scene = load("res://main.tscn").instantiate()
     root.add_child(scene)
     await process_frame
-    if not is_instance_valid(scene.ball) or not is_instance_valid(scene.camera) or scene.packed.size() != 5 or scene.orbs.size() != 3:
+    if not is_instance_valid(scene.ball) or not is_instance_valid(scene.camera) or scene.packed.size() != 14 or scene.orbs.size() != 3:
         push_error("Smoke: missing scene components")
         quit(1)
         return

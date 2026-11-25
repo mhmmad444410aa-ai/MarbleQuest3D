@@ -65,7 +65,7 @@ func _ready() -> void:
     if not parsed is Dictionary:
         help.text = tr_word(11)
         return
-    for key in ["track", "ball", "tree", "marker", "support"]:
+    for key in ["track", "ball", "tree", "marker", "support", "cliff", "waterfall", "rock", "bridge_wood", "grass", "flower", "forest_tree", "forest_tree_alt", "forest_bush"]:
         if not parsed.has(key) or not ResourceLoader.exists(parsed[key]):
             help.text = tr_word(11)
             return
@@ -137,7 +137,8 @@ func model(kind: String, parent: Node3D, size: Vector3, offset: Vector3 = Vector
     var factor = size / Vector3(maxf(bounds.size.x, 0.001), maxf(bounds.size.y, 0.001), maxf(bounds.size.z, 0.001))
     mesh.scale = factor
     mesh.position = -bounds.get_center() * factor + offset
-    apply_palette(kind, mesh)
+    if kind in ["track", "ball", "tree", "marker", "support"]:
+        apply_palette(kind, mesh)
     return wrapper
 
 func palette_material(key: String, colour: Color, roughness: float, metallic: float) -> StandardMaterial3D:
@@ -244,18 +245,7 @@ func reset_course() -> void:
     platform(Vector3(0,0,-17),Vector3(5.4,0.7,4.35))
     platform(Vector3(0,0,-21),Vector3(3.8,0.7,4))
     platform(Vector3(0,0,-25),Vector3(5.2,0.7,4))
-    decoration("tree",Vector3(-1.8,1.1,0),Vector3(1.0,2.2,1.0))
-    decoration("tree",Vector3(2.0,1.3,-9),Vector3(1.1,2.6,1.1))
-    decoration("tree",Vector3(-1.9,1.1,-25),Vector3(1.1,2.2,1.1))
-    for z in [0,-9,-17,-25]:
-        decoration("support",Vector3(0,-1.7,z),Vector3(3.0,2.6,2.6))
-        decoration("support",Vector3(0,-3.5,z),Vector3(1.7,1.5,1.5))
-    for i in range(6):
-        var side = -1.0 if i % 2 == 0 else 1.0
-        var island = Vector3(side*(8.0+float(i%3)*2.5), -2.5-float(i%2), -float(i)*5.0)
-        decoration("support",island,Vector3(4.2,3.0,3.8))
-        decoration("tree",island+Vector3(0,2.6,0),Vector3(1.6,2.4,1.6))
-        decoration("tree",island+Vector3(1.0,2.2,0.9),Vector3(0.85,1.5,0.85))
+    island_landscape()
     decoration("marker",Vector3(1.7,1.25,-17),Vector3(0.7,2.2,0.7))
     decoration("marker",Vector3(1.8,1.5,-25),Vector3(0.9,2.8,0.9))
     orb(Vector3(0,0.7,-4.8))
@@ -296,6 +286,43 @@ func reset_course() -> void:
     model("ball",ball,Vector3.ONE * 0.76)
     camera.position = spawn + Vector3(0,8,8)
     camera.look_at(spawn + Vector3(0,0,-3))
+
+# Imported environmental meshes remain visual only: the proven course
+# collision shapes are unchanged. No generated primitive scenery.
+func island_landscape() -> void:
+    var islands = [
+        [Vector3(0,-1.9,0),Vector3(5.6,3.0,6.4)],
+        [Vector3(0,-2.3,-9),Vector3(7.0,3.8,4.6)],
+        [Vector3(-3.55,-1.7,-9),Vector3(2.7,2.8,3.2)],
+        [Vector3(0,-2.1,-17),Vector3(6.1,3.4,4.6)],
+        [Vector3(0,-2.2,-25),Vector3(6.0,3.6,4.5)]
+    ]
+    for entry in islands:
+        var centre: Vector3 = entry[0]
+        var extent: Vector3 = entry[1]
+        decoration("cliff",centre,extent)
+        decoration("rock",centre+Vector3(0,-extent.y*0.48,0),extent*0.60)
+        decoration("rock",centre+Vector3(extent.x*0.37,-0.4,0.4),extent*0.33)
+    # Border foliage, deliberately off the path of the marble.
+    for v in [Vector3(-2.1,0,0.6),Vector3(2.5,0,-9.8),Vector3(-2.15,0,-17.2),Vector3(-2.15,0,-25.2)]:
+        decoration("forest_tree",v+Vector3(0,1.55,0),Vector3(1.8,3.1,1.8))
+        decoration("forest_bush",v+Vector3(0.28,0.33,0.55),Vector3(0.85,0.66,0.8))
+        decoration("flower",v+Vector3(0.38,0.17,-0.65),Vector3(0.35,0.34,0.35))
+        decoration("grass",v+Vector3(-0.2,0.15,0.75),Vector3(0.4,0.30,0.4))
+    # Distinct floating landmarks beside the route.
+    for i in range(6):
+        var side = -1.0 if i % 2 == 0 else 1.0
+        var centre = Vector3(side*(7.4+float(i%3)*1.5),-2.4-float(i%2)*0.7,-float(i)*5.0)
+        var extent = Vector3(4.5+float(i%2),3.8,4.3)
+        decoration("cliff",centre,extent)
+        decoration("rock",centre+Vector3(0,-2.4,0),Vector3(2.6,2.0,2.4))
+        decoration("forest_tree_alt",centre+Vector3(-0.7,3.1,0),Vector3(2.2,3.8,2.1))
+        decoration("forest_tree",centre+Vector3(0.9,2.7,0.45),Vector3(1.6,2.8,1.5))
+        decoration("forest_bush",centre+Vector3(0.1,2.3,1.0),Vector3(1.0,0.7,1.0))
+    decoration("waterfall",Vector3(-3.9,-3.1,-17),Vector3(2.3,5.0,2.5))
+    decoration("waterfall",Vector3(7.3,-4.0,-7),Vector3(3.0,6.5,3.0))
+    # Actual imported bridge model on a background island, not a collider.
+    decoration("bridge_wood",Vector3(8.1,-0.6,-15),Vector3(1.8,0.6,3.5))
 
 func _physics_process(delta: float) -> void:
     if not is_instance_valid(ball) or finished or menu_open:
