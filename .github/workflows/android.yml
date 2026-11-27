@@ -44,7 +44,7 @@ jobs:
           godot --version
       - name: Fetch licensed original assets
         run: python3 tools/fetch_assets.py
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: Generate original HD material artwork

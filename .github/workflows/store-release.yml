@@ -81,7 +81,7 @@ jobs:
         run: python3 tools/android/prepare_template.py "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/android_source.zip"
       - name: Fetch licensed original assets
         run: python3 tools/fetch_assets.py
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: Generate original HD material artwork
