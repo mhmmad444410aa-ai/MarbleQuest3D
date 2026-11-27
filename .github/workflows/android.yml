@@ -102,7 +102,7 @@ jobs:
               for abi in ['arm64-v8a','armeabi-v7a']:
                   assert any(n.startswith(f'lib/{abi}/') and n.endswith('.so') for n in z.namelist()), abi
           PY
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: success()
         with:
           name: MarbleQuest3D-signed-prototype
@@ -112,14 +112,14 @@ jobs:
             build/badging.txt
             assets/source.json
           if-no-files-found: error
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: success()
         with:
           name: MarbleQuest3D-APK-only
           path: build/MarbleQuest3D-prototype.apk
           compression-level: 0
           if-no-files-found: error
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: prototype-diagnostics
